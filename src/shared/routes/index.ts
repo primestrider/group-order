@@ -5,7 +5,7 @@ import { UtilsPageName } from "../models"
 const utilRoutes: RouteRecordRaw[] = [
   // delete or change this later
   {
-    path: "/",
+    path: "/landing",
     name: "LandingPage",
     component: () => import("@/shared/views/LandingPageView.vue"),
   },
