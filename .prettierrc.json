@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/prettierrc",
+  "semi": false,
+  "singleQuote": false,
+  "printWidth": 100,
+  "plugins": ["@trivago/prettier-plugin-sort-imports"],
+  "importOrder": [
+    "^@/assets/(.*)$",
+    "^@primevue/(.*)$",
+    "^@/layouts/(.*)$",
+    "^@/components/(.*)$",
+    "^@/composables/(.*)$",
+    "^@/stores/(.*)$",
+    "^@/models/(.*)$",
+    "^@/services/(.*)$",
+    "^@/(.*)$",
+    "^[./]"
+  ],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true
+}
