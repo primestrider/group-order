@@ -1,21 +1,70 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #0F1A22;
+  --font-outfit: "Outfit", sans-serif;
+  --color-primary: #0f1a22;
   --color-secondary: #132128;
 
-  --color-accent: #2F6F85;
-  --color-accent-hover: #3C8AA3;
+  --color-accent: #2f6f85;
+  --color-accent-hover: #3c8aa3;
   --color-accent-dark: #255769;
 
-  --color-primary-text: #D0D7DA;
-  --color-secondary-text: #8A979C;
+  --color-primary-text: #d0d7da;
+  --color-secondary-text: #8a979c;
 
-  --color-border: #1A2C33;
+  --color-border: #1a2c33;
   --color-border-strong: #223840;
 
-  --color-success: #2F7F64;
-  --color-warning: #A3862A;
-  --color-danger: #8E3F3F;
-  --color-info: #3A6F9A;
+  --color-success: #2f7f64;
+  --color-warning: #a3862a;
+  --color-danger: #8e3f3f;
+  --color-info: #3a6f9a;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("./fonts/Outfit-Light.ttf");
+  font-weight: 300;
+  unicode-range: U+0025-00FF;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("./fonts/Outfit-Regular.ttf");
+  font-weight: 400;
+  unicode-range: U+0025-00FF;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("./fonts/Outfit-Medium.ttf");
+  font-weight: 500;
+  unicode-range: U+0025-00FF;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("./fonts/Outfit-SemiBold.ttf");
+  font-weight: 600;
+  unicode-range: U+0025-00FF;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("./fonts/Outfit-Bold.ttf");
+  font-weight: 700;
+  unicode-range: U+0025-00FF;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Outfit";
+  src: url("./fonts/Outfit-ExtraBold.ttf");
+  font-weight: 800;
+  unicode-range: U+0025-00FF;
+  font-display: swap;
 }
