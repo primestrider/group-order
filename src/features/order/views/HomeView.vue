@@ -26,13 +26,7 @@ const submitJoin = (): void => {
 </script>
 
 <template>
-  <main class="min-h-screen flex flex-col items-center justify-center p-4 md:p-6">
-    <!-- Title -->
-    <section class="mt-2 md:mt-5">
-      <h1 class="text-primary-text text-4xl font-bold">Group Order</h1>
-    </section>
-
-    <!-- Card Section with premium smooth entrance -->
+  <main class="min-h-screen flex flex-col items-center justify-center p-6">
     <transition
       appear
       enter-from-class="opacity-0 translate-y-4 scale-[0.985]"
@@ -42,68 +36,71 @@ const submitJoin = (): void => {
       leave-active-class="transition-opacity duration-200"
       leave-to-class="opacity-0"
     >
-      <BaseCard class="mt-5 w-full max-w-3xl">
-        <template #content>
-          <!-- Actions -->
+      <section class="max-w-3xl w-full">
+        <h1 class="text-primary-text text-4xl font-bold text-center">Group Order</h1>
+        <BaseCard class="mt-5">
+          <template #content>
+            <!-- Actions -->
 
-          <div class="flex flex-col gap-4">
-            <h4 class="text-primary-text text-xl font-semibold">Start Order</h4>
-            <!-- Create Order -->
-            <RouterLink :to="{ name: OrderPageName.CREATE_ORDER }">
-              <BaseButton fluid :label="'Create Order'" class="cursor-pointer"></BaseButton>
-            </RouterLink>
+            <div class="flex flex-col gap-4">
+              <h4 class="text-primary-text text-xl font-semibold">Start Order</h4>
+              <!-- Create Order -->
+              <RouterLink :to="{ name: OrderPageName.CREATE_ORDER }">
+                <BaseButton fluid :label="'Create Order'" class="cursor-pointer"></BaseButton>
+              </RouterLink>
 
-            <!-- Divider -->
-            <div class="relative my-1 flex items-center">
-              <div class="flex-grow border-t border-border"></div>
-              <span class="mx-3 text-secondary-text text-sm">or</span>
-              <div class="flex-grow border-t border-border"></div>
-            </div>
-
-            <!-- Join by UUID -->
-            <h4 class="text-primary-text text-xl font-semibold">Join Order</h4>
-
-            <form @submit.prevent="submitJoin" class="w-full flex flex-col gap-2">
-              <label class="sr-only" for="uuid">Order UUID</label>
-
-              <div class="flex flex-col gap-3 md:flex-row md:items-center">
-                <input
-                  id="uuid"
-                  v-model="uuid"
-                  @input="touched = true"
-                  type="text"
-                  placeholder="Enter Order UUID"
-                  class="w-full md:flex-1 py-3 px-4 rounded-full bg-secondary border border-border text-primary-text placeholder:text-secondary-text outline-none focus:outline-none focus:ring-2 focus:ring-white/10 transition-shadow duration-200"
-                  :aria-invalid="!isValidUuid"
-                  aria-describedby="uuid-help"
-                />
-
-                <button
-                  type="submit"
-                  :disabled="!isValidUuid"
-                  class="w-full md:w-auto px-6 py-3 rounded-full font-semibold transition-transform transform bg-accent hover:bg-accent-hover text-primary-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white/10 active:translate-y-0"
-                >
-                  Join
-                </button>
+              <!-- Divider -->
+              <div class="relative my-1 flex items-center">
+                <div class="flex-grow border-t border-border"></div>
+                <span class="mx-3 text-secondary-text text-sm">or</span>
+                <div class="flex-grow border-t border-border"></div>
               </div>
 
-              <p
-                id="uuid-help"
-                class="text-sm mt-1"
-                :class="{
-                  'text-danger': touched && !isValidUuid,
-                  'text-secondary-text': !touched || isValidUuid,
-                }"
-              >
-                <span v-if="!touched || isValidUuid">
-                  You can paste the order UUID here and press Join.
-                </span>
-                <span v-else>Invalid UUID — please check and try again.</span>
-              </p>
-            </form>
-          </div>
-        </template>
-      </BaseCard>
+              <!-- Join by UUID -->
+              <h4 class="text-primary-text text-xl font-semibold">Join Order</h4>
+
+              <form @submit.prevent="submitJoin" class="w-full flex flex-col gap-2">
+                <label class="sr-only" for="uuid">Order UUID</label>
+
+                <div class="flex flex-col gap-3 md:flex-row md:items-center">
+                  <input
+                    id="uuid"
+                    v-model="uuid"
+                    @input="touched = true"
+                    type="text"
+                    placeholder="Enter Order UUID"
+                    class="w-full md:flex-1 py-3 px-4 rounded-full bg-secondary border border-border text-primary-text placeholder:text-secondary-text outline-none focus:outline-none focus:ring-2 focus:ring-white/10 transition-shadow duration-200"
+                    :aria-invalid="!isValidUuid"
+                    aria-describedby="uuid-help"
+                  />
+
+                  <button
+                    type="submit"
+                    :disabled="!isValidUuid"
+                    class="w-full md:w-auto px-6 py-3 rounded-full font-semibold transition-transform transform bg-accent hover:bg-accent-hover text-primary-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white/10 active:translate-y-0"
+                  >
+                    Join
+                  </button>
+                </div>
+
+                <p
+                  id="uuid-help"
+                  class="text-sm mt-1"
+                  :class="{
+                    'text-danger': touched && !isValidUuid,
+                    'text-secondary-text': !touched || isValidUuid,
+                  }"
+                >
+                  <span v-if="!touched || isValidUuid">
+                    You can paste the order UUID here and press Join.
+                  </span>
+                  <span v-else>Invalid UUID — please check and try again.</span>
+                </p>
+              </form>
+            </div>
+          </template>
+        </BaseCard>
+      </section>
     </transition>
   </main>
 </template>
