@@ -68,3 +68,18 @@
   unicode-range: U+0025-00FF;
   font-display: swap;
 }
+
+/* Dark theme hint */
+input[type="number"] {
+  color-scheme: dark;
+}
+
+textarea {
+  color-scheme: dark;
+}
+
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  color-scheme: dark;
+}
