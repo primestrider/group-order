@@ -3,18 +3,29 @@ import { createApp } from "vue"
 
 import App from "./App.vue"
 import "./assets/main.css"
-import { i18n } from "./plugins/language/index"
+import { ensureAnonymousAuth } from "./plugins/firebase/auth"
+import { i18n } from "./plugins/language"
 import { installVueQuery } from "./plugins/tanstack"
 import { setupVeeValidate } from "./plugins/vee-validate"
 import router from "./router"
 
-const app = createApp(App)
+async function bootstrap() {
+  try {
+    await ensureAnonymousAuth()
+  } catch (error) {
+    console.error("Anonymous auth failed:", error)
+  }
 
-app.use(createPinia())
-app.use(router)
-app.use(i18n)
+  const app = createApp(App)
 
-installVueQuery(app)
-setupVeeValidate(app)
+  app.use(createPinia())
+  app.use(router)
+  app.use(i18n)
 
-app.mount("#app")
+  installVueQuery(app)
+  setupVeeValidate(app)
+
+  app.mount("#app")
+}
+
+await bootstrap()
