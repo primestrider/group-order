@@ -83,3 +83,20 @@ export const formatTimeStampRelative = (
 
 export const isSupportedDateLocale = (locale: string): locale is DateLocaleCode =>
   locale in DATE_FNS_LOCALES
+
+export const toDateTimeLocal = (ts: number): string => {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, "0")
+
+  return (
+    `${d.getFullYear()}-` +
+    `${pad(d.getMonth() + 1)}-` +
+    `${pad(d.getDate())}T` +
+    `${pad(d.getHours())}:` +
+    `${pad(d.getMinutes())}`
+  )
+}
+
+export const toTimestamp = (value: string): number => {
+  return new Date(value).getTime()
+}

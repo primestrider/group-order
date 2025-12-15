@@ -7,13 +7,18 @@ import type { BaseFormFieldProps } from "../models"
 /**
  * BaseFormField
  *
- * A headless, accessible form field wrapper that provides:
- * - Label rendering (slot or prop-based)
- * - Error & hint display
- * - ARIA accessibility attributes
+ * Headless form field wrapper with:
+ * - Reserved space for label & messages (prevents layout shift)
+ * - Accessible error & hint handling
+ * - Clean DOM (no fake placeholders like &nbsp;)
  *
- * This component does NOT manage form state or validation.
- * All values and errors must be provided by the parent.
+ * Responsibilities:
+ * - Layout & accessibility only
+ * - Does NOT manage form state or validation logic
+ *
+ * Expected usage:
+ * - Parent handles value & validation
+ * - This component only renders structure
  */
 const {
   label = "",
@@ -25,64 +30,71 @@ const {
 } = defineProps<BaseFormFieldProps>()
 
 /**
- * Generate a stable unique ID for aria-describedby.
- * Used when fieldName is not provided.
+ * Generate stable unique ID
+ * Used when fieldName is not provided
  */
 const uid = useId()
 
 /**
- * Whether field currently has an error.
- * Error is ignored when the field is disabled.
+ * Whether the field currently has an error
+ * Disabled fields do not display errors
  */
 const hasError = computed(() => Boolean(error) && !disabled)
 
 /**
- * ID for error message (used by aria-describedby).
+ * Error message ID (for aria-describedby)
  */
 const errorId = computed(() => (hasError.value ? `${fieldName || uid}-error` : undefined))
 
 /**
- * ID for hint message (used by aria-describedby).
+ * Hint message ID (for aria-describedby)
  */
 const hintId = computed(() => (hint && !hasError.value ? `${fieldName || uid}-hint` : undefined))
 
 /**
- * aria-describedby value.
- * Points to either hint or error message if present.
+ * aria-describedby value
+ * Points to either error or hint message
  */
 const describedBy = computed(() => errorId.value || hintId.value)
 </script>
 
 <template>
   <div class="flex flex-col gap-1">
-    <!-- Label -->
+    <!-- Label (reserved height to prevent layout shift) -->
     <label
-      v-if="label || $slots.label"
       :for="fieldName || undefined"
-      class="text-sm font-medium transition"
+      class="min-h-2 ml-2 text-sm font-medium flex items-end transition"
       :class="disabled ? 'text-slate-500' : 'text-slate-300'"
     >
-      <!-- Label slot (advanced customization) -->
       <slot name="label">
-        {{ label }}
+        <span :class="label ? '' : 'invisible'">
+          {{ label || "placeholder" }}
+        </span>
       </slot>
 
-      <span v-if="required && !disabled" class="ml-0.5 text-red-400" aria-hidden="true"> * </span>
+      <span v-if="required && !disabled && label" class="ml-0.5 text-red-400" aria-hidden="true">
+        *
+      </span>
     </label>
 
-    <!-- Input wrapper -->
-    <div :aria-invalid="hasError" :aria-describedby="describedBy">
+    <!-- Input -->
+    <div
+      class="flex items-center min-h-[3rem]"
+      :aria-invalid="hasError"
+      :aria-describedby="describedBy"
+    >
       <slot />
     </div>
 
-    <!-- Hint -->
-    <p v-if="hint && !hasError" :id="hintId" class="text-xs text-slate-400">
-      {{ hint }}
-    </p>
+    <!-- Message row (reserved height, no fake content) -->
+    <div class="min-h-2 text-sm ml-2" aria-live="polite">
+      <p v-if="hasError" :id="errorId" class="text-red-400">
+        {{ error }}
+      </p>
 
-    <!-- Error (hidden when disabled) -->
-    <p v-if="hasError" :id="errorId" class="text-xs text-red-400">
-      {{ error }}
-    </p>
+      <p v-else-if="hint" :id="hintId" class="text-slate-400">
+        {{ hint }}
+      </p>
+    </div>
   </div>
 </template>
