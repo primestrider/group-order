@@ -16,7 +16,7 @@ export default {
 
       maxParticipants: {
         label: "Maximum Participants",
-        placeholder: "Enter the maximum number of participants",
+        placeholder: "Maximum number of participants",
       },
 
       lastOrderAt: {
@@ -28,5 +28,7 @@ export default {
         submit: "Create Order",
       },
     },
+
+    error: "Error when creating order, please try again later.",
   },
 }

@@ -28,5 +28,7 @@ export default {
         submit: "Create Order",
       },
     },
+
+    error: "Error when creating order, please try again later.",
   },
 }

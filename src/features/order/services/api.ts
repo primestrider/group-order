@@ -1,8 +1,9 @@
-import { Timestamp, addDoc, collection, serverTimestamp } from "firebase/firestore"
+import { Timestamp, addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore"
 
 import { firebaseDb } from "@/plugins/firebase"
 import { auth } from "@/plugins/firebase/auth"
 
+import type { OrderDetailResponse } from "../models"
 import type { CreateOrderValues } from "../models/create-order.schema"
 
 /**
@@ -48,4 +49,36 @@ export const createGroupOrder = async (payload: CreateOrderValues): Promise<stri
   const documentReference = await addDoc(collection(firebaseDb, "orders"), values)
 
   return documentReference.id
+}
+
+/**
+ * Fetch single order detail by orderId
+ *
+ * @param id - Firestore document ID
+ * @throws Error if order not found
+ */
+export const getDetailOrder = async (id: string): Promise<OrderDetailResponse> => {
+  if (!firebaseDb) {
+    throw new Error("Firebase is not initialized")
+  }
+
+  const referenceDocument = doc(firebaseDb, "orders", id)
+  const snapshotDocument = await getDoc(referenceDocument)
+
+  if (!snapshotDocument.exists()) {
+    throw new Error("Order not found")
+  }
+
+  const response = snapshotDocument.data()
+
+  return {
+    id: snapshotDocument.id,
+    orderName: response.orderName,
+    orderDescription: response.orderDescription,
+    ownerUid: response.ownerUid,
+    maxParticipants: response.maxParticipants,
+    participantsCount: response.participantsCount,
+    lastOrderAt: response.lastOrderAt.toDate(),
+    createdAt: response.createdAt.toDate(),
+  }
 }

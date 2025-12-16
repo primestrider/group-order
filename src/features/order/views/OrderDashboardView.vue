@@ -39,7 +39,7 @@ const submitJoin = (): void => {
             <div class="flex flex-col gap-4">
               <h4 class="text-primary-text text-xl font-semibold">Start Order</h4>
               <!-- Create Order -->
-              <RouterLink :to="{ name: OrderPageName.CREATE_ORDER }">
+              <RouterLink :to="{ name: OrderPageName.ORDER_CREATE }">
                 <BaseButton fluid :label="'Create Order'" class="cursor-pointer"></BaseButton>
               </RouterLink>
 

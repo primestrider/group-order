@@ -7,6 +7,7 @@ import { computed, watch } from "vue"
 import { useRouter } from "vue-router"
 
 import { translate } from "@/plugins/language"
+import { showToast } from "@/plugins/toaster/toast"
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseCard from "@/shared/components/BaseCard.vue"
 import BaseFormField from "@/shared/components/BaseFormField.vue"
@@ -120,15 +121,16 @@ const { mutate: createOrderMutate, isPending: isLoadingCreate } = useMutation({
     cachedForm.value = {}
 
     // redirect to order detail
-    router.push({
-      name: OrderPageName.ORDER,
+    router.replace({
+      name: OrderPageName.ORDER_DETAIL,
       params: { id: orderId },
     })
   },
 
   onError(error) {
-    // showToast here
-    console.error("Create order failed:", error)
+    if (error) {
+      showToast(translate("features.order.create_order.error"), "error")
+    }
   },
 })
 
