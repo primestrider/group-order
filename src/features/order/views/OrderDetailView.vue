@@ -2,7 +2,7 @@
 import { IconClipboardCopy, IconPlus, IconShare, IconUsers } from "@tabler/icons-vue"
 import { useQuery } from "@tanstack/vue-query"
 import { useClipboard, useShare } from "@vueuse/core"
-import { computed, watch } from "vue"
+import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { translate } from "@/plugins/language"
@@ -12,6 +12,7 @@ import BaseSkeleton from "@/shared/components/BaseSkeleton.vue"
 import { useDateFormatter } from "@/shared/composables/useDateFormatter"
 import { UtilsPageName } from "@/shared/models"
 
+import AddItemDialog from "../components/AddItemDialog.vue"
 import { getDetailOrder } from "../services/api"
 
 const route = useRoute()
@@ -19,7 +20,7 @@ const router = useRouter()
 const orderId = route.params.id as string
 
 const shareLink = computed(() => {
-  return `${window.location.origin}${route.fullPath}`
+  return `${globalThis.location.origin}${route.fullPath}`
 })
 
 const {
@@ -65,6 +66,11 @@ watch(isError, (hasError) => {
     router.replace({ name: UtilsPageName.PAGE_NOT_FOUND })
   }
 })
+
+const isOpenAddItem = ref<boolean>(false)
+const handleOpenAddItem = (): void => {
+  isOpenAddItem.value = true
+}
 </script>
 
 <template>
@@ -186,11 +192,13 @@ watch(isError, (hasError) => {
         <template v-else-if="orderDetail"> List participants here </template>
 
         <div class="absolute bottom-5 right-5">
-          <BaseButton>
+          <BaseButton @click="handleOpenAddItem">
             <template #icon> <IconPlus class="w-6 h-6 md:w-8 md:h-8"></IconPlus> </template>
           </BaseButton>
         </div>
       </template>
     </BaseCard>
+
+    <AddItemDialog v-model="isOpenAddItem"></AddItemDialog>
   </main>
 </template>

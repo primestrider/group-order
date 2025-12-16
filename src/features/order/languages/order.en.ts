@@ -5,7 +5,7 @@ export default {
     form: {
       orderName: {
         label: "Order Name",
-        placeholder: "Enter the order name",
+        placeholder: "Enter the order name (example: Order Seblak Mewek)",
         hint: "example: Order Bubble Tea",
       },
 
@@ -30,5 +30,13 @@ export default {
     },
 
     error: "Error when creating order, please try again later.",
+  },
+
+  order_detail: {
+    add_item: {
+      form: {
+        title: "Add Your Items",
+      },
+    },
   },
 }
