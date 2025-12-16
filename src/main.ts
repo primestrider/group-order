@@ -6,6 +6,7 @@ import "./assets/main.css"
 import { ensureAnonymousAuth } from "./plugins/firebase/auth"
 import { i18n } from "./plugins/language"
 import { installVueQuery } from "./plugins/tanstack"
+import { installToaster } from "./plugins/toaster"
 import { setupVeeValidate } from "./plugins/vee-validate"
 import router from "./router"
 
@@ -24,6 +25,7 @@ async function bootstrap() {
 
   installVueQuery(app)
   setupVeeValidate(app)
+  installToaster(app)
 
   app.mount("#app")
 }

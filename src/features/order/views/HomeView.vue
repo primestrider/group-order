@@ -1,27 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
-import { useRouter } from "vue-router"
+import { ref } from "vue"
+
+// import { useRouter } from "vue-router"
 
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseCard from "@/shared/components/BaseCard.vue"
 
 import { OrderPageName } from "../models"
 
-const router = useRouter()
-const uuid = ref("")
+// const router = useRouter()
+const orderId = ref("")
 const touched = ref(false)
-
-const isValidUuid = computed<boolean>(() => {
-  const v = uuid.value.trim()
-  if (!v) return false
-  const pattern = /^[0-9a-fA-F-]{6,36}$/
-  return pattern.test(v)
-})
 
 const submitJoin = (): void => {
   touched.value = true
-  if (!isValidUuid.value) return
-  router.push({ path: "/join", query: { uuid: uuid.value.trim() } })
+
+  // router.push({ path: "/join", query: { uuid: uuid.value.trim() } })
 }
 </script>
 
@@ -65,37 +59,21 @@ const submitJoin = (): void => {
                 <div class="flex flex-col gap-3 md:flex-row md:items-center">
                   <input
                     id="uuid"
-                    v-model="uuid"
+                    v-model="orderId"
                     @input="touched = true"
                     type="text"
-                    placeholder="Enter Order UUID"
+                    placeholder="Enter Order ID"
                     class="w-full md:flex-1 py-3 px-4 rounded-full bg-secondary border border-border text-primary-text placeholder:text-secondary-text outline-none focus:outline-none focus:ring-2 focus:ring-white/10 transition-shadow duration-200"
-                    :aria-invalid="!isValidUuid"
                     aria-describedby="uuid-help"
                   />
 
-                  <button
+                  <BaseButton
                     type="submit"
-                    :disabled="!isValidUuid"
+                    fluid
+                    label="Join"
                     class="w-full md:w-auto px-6 py-3 rounded-full font-semibold transition-transform transform bg-accent hover:bg-accent-hover text-primary-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white/10 active:translate-y-0"
-                  >
-                    Join
-                  </button>
+                  ></BaseButton>
                 </div>
-
-                <p
-                  id="uuid-help"
-                  class="text-sm mt-1"
-                  :class="{
-                    'text-danger': touched && !isValidUuid,
-                    'text-secondary-text': !touched || isValidUuid,
-                  }"
-                >
-                  <span v-if="!touched || isValidUuid">
-                    You can paste the order UUID here and press Join.
-                  </span>
-                  <span v-else>Invalid UUID — please check and try again.</span>
-                </p>
               </form>
             </div>
           </template>

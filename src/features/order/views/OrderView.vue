@@ -1,11 +1,5 @@
-<script setup lang="ts">
-import OrderComponent from "../components/OrderComponent.vue"
-</script>
+<script setup lang="ts"></script>
 
 <template>
-  <div
-    class="min-h-screen flex flex-col items-center justify-center bg-emerald-900 text-neutral-100 px-6"
-  >
-    <OrderComponent></OrderComponent>
-  </div>
+  <main class="min-h-screen flex flex-col items-center justify-center p-6"></main>
 </template>

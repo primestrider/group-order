@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { useMutation } from "@tanstack/vue-query"
 import { toTypedSchema } from "@vee-validate/zod"
 import { useSessionStorage } from "@vueuse/core"
 import { useForm } from "vee-validate"
 import { computed, watch } from "vue"
+import { useRouter } from "vue-router"
 
 import { translate } from "@/plugins/language"
 import BaseButton from "@/shared/components/BaseButton.vue"
@@ -13,15 +15,17 @@ import { toDateTimeLocal, toTimestamp } from "@/shared/helpers/date"
 
 import { OrderPageName } from "../models"
 import { type CreateOrderValues, createOrderSchema } from "../models/create-order.schema"
+import { createGroupOrder } from "../services/api"
 
 /**
  * Session storage key for create order form
+ * Used to persist form state across reloads
  */
 const CREATE_ORDER_STORAGE_KEY = "create-order-form"
 
 /**
  * Default value for `lastOrderAt`
- * Current time + 2 hours (timestamp)
+ * Current time + 2 hours (timestamp in milliseconds)
  */
 const nowPlus2Hours = Date.now() + 2 * 60 * 60 * 1000
 
@@ -33,9 +37,15 @@ const nowPlus2Hours = Date.now() + 2 * 60 * 60 * 1000
 const cachedForm = useSessionStorage<Partial<CreateOrderValues>>(CREATE_ORDER_STORAGE_KEY, {})
 
 /**
+ * Router instance
+ * Used for navigation after successful order creation
+ */
+const router = useRouter()
+
+/**
  * Create Order form setup
  * - Schema-driven validation (Zod)
- * - Typed form values
+ * - Fully typed form values
  * - Initial values restored from sessionStorage
  */
 const {
@@ -48,13 +58,13 @@ const {
   validationSchema: toTypedSchema(createOrderSchema),
   initialValues: {
     lastOrderAt: nowPlus2Hours,
-    ...cachedForm.value, // restore cached values
+    ...cachedForm.value,
   },
 })
 
 /**
  * Field-level error helpers
- * Supports client + backend error handling
+ * Supports both client-side and backend errors
  */
 const { fieldError: createOrderFieldError, clearBackendError: clearOrderError } =
   useBaseFieldError<CreateOrderValues>(createOrderErrors)
@@ -69,7 +79,8 @@ const [lastOrderAt] = defineField("lastOrderAt")
 
 /**
  * Adapter for `datetime-local` input
- * - UI uses string (YYYY-MM-DDTHH:mm)
+ *
+ * - UI uses string format: YYYY-MM-DDTHH:mm
  * - Internal value stored as timestamp (number)
  */
 const lastOrderAtInput = computed<string>({
@@ -83,7 +94,7 @@ const lastOrderAtInput = computed<string>({
 
 /**
  * Persist form values to sessionStorage
- * Automatically triggered on every change
+ * Automatically triggered on every form change
  */
 watch(
   createOrderForm,
@@ -94,15 +105,39 @@ watch(
 )
 
 /**
+ * TanStack Query mutation for creating an order
+ *
+ * Handles:
+ * - loading state
+ * - error state
+ * - success side effects (reset + redirect)
+ */
+const { mutate: createOrderMutate, isPending: isLoadingCreate } = useMutation({
+  mutationFn: createGroupOrder,
+
+  onSuccess(orderId: string) {
+    // clear cached form
+    cachedForm.value = {}
+
+    // redirect to order detail
+    router.push({
+      name: OrderPageName.ORDER,
+      params: { id: orderId },
+    })
+  },
+
+  onError(error) {
+    // showToast here
+    console.error("Create order failed:", error)
+  },
+})
+
+/**
  * Submit handler
  * Executed only when form is valid
- * Clears session cache on success
  */
 const handleCreateOrder = handleSubmit((values) => {
-  console.log("SUBMIT PAYLOAD:", values)
-
-  // Clear cached form after successful submit
-  cachedForm.value = {}
+  createOrderMutate(values)
 })
 </script>
 
@@ -110,22 +145,28 @@ const handleCreateOrder = handleSubmit((values) => {
   <main class="min-h-screen flex flex-col items-center justify-center p-6">
     <section class="max-w-3xl w-full flex flex-col justify-center gap-2">
       <RouterLink :to="{ name: OrderPageName.HOME }" replace>
-        <span class="text-primary-text underline"> back to home</span>
+        <span class="text-primary-text underline">back to home</span>
       </RouterLink>
 
       <BaseCard title="Create Order">
         <template #content>
-          <form @submit.prevent="handleCreateOrder" class="space-y-2 md:space-y-4">
+          <form
+            @submit.prevent="handleCreateOrder"
+            class="space-y-2 md:space-y-4"
+            :aria-disabled="isLoadingCreate"
+          >
             <!-- Order Name -->
             <BaseFormField
               field-name="orderName"
               required
               :label="translate('features.order.create_order.form.orderName.label')"
               :error="createOrderFieldError('orderName')"
+              :disabled="isLoadingCreate"
             >
               <input
                 id="orderName"
                 v-model="orderName"
+                :disabled="isLoadingCreate"
                 @input="clearOrderError('orderName')"
                 type="text"
                 :placeholder="translate('features.order.create_order.form.orderName.placeholder')"
@@ -139,11 +180,13 @@ const handleCreateOrder = handleSubmit((values) => {
               required
               :label="translate('features.order.create_order.form.orderDescription.label')"
               :error="createOrderFieldError('orderDescription')"
+              :disabled="isLoadingCreate"
             >
               <textarea
                 rows="3"
                 id="orderDescription"
                 v-model="orderDescription"
+                :disabled="isLoadingCreate"
                 @input="clearOrderError('orderDescription')"
                 :placeholder="
                   translate('features.order.create_order.form.orderDescription.placeholder')
@@ -159,11 +202,13 @@ const handleCreateOrder = handleSubmit((values) => {
                 field-name="maxParticipants"
                 required
                 :label="translate('features.order.create_order.form.maxParticipants.label')"
+                :disabled="isLoadingCreate"
                 :error="createOrderFieldError('maxParticipants')"
               >
                 <input
                   id="maxParticipants"
                   v-model.number="maxParticipants"
+                  :disabled="isLoadingCreate"
                   @input="clearOrderError('maxParticipants')"
                   type="number"
                   min="1"
@@ -181,10 +226,12 @@ const handleCreateOrder = handleSubmit((values) => {
                 required
                 :label="translate('features.order.create_order.form.lastOrderAt.label')"
                 :error="createOrderFieldError('lastOrderAt')"
+                :disabled="isLoadingCreate"
               >
                 <input
                   id="lastOrderAt"
                   v-model="lastOrderAtInput"
+                  :disabled="isLoadingCreate"
                   @input="clearOrderError('lastOrderAt')"
                   type="datetime-local"
                   :placeholder="
@@ -200,7 +247,7 @@ const handleCreateOrder = handleSubmit((values) => {
               fluid
               type="submit"
               :label="translate('features.order.create_order.form.button.submit')"
-              :disabled="!meta.valid || meta.pending"
+              :disabled="!meta.valid || meta.pending || isLoadingCreate"
             />
           </form>
         </template>

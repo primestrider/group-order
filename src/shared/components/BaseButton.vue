@@ -24,7 +24,7 @@ const buttonClass = computed(() => [
     :type="props.type"
     :disabled="props.disabled"
     :class="buttonClass"
-    class="px-6 py-3 rounded-full font-semibold transition-transform transform text-primary-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white/10 active:translate-y-0"
+    class="px-6 py-3 rounded-full font-semibold transition-transform transform text-primary-text hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white/10 active:translate-y-0"
   >
     {{ props.label }}
   </button>
