@@ -20,7 +20,7 @@ export default {
       },
 
       lastOrderAt: {
-        label: "Last Order Date",
+        label: "Last Order",
         placeholder: "Select the last order date and time",
       },
 
