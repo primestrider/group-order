@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { IconClipboardCopy, IconShare, IconUsers } from "@tabler/icons-vue"
+import { IconClipboardCopy, IconPlus, IconShare, IconUsers } from "@tabler/icons-vue"
 import { useQuery } from "@tanstack/vue-query"
 import { useClipboard, useShare } from "@vueuse/core"
 import { computed, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { translate } from "@/plugins/language"
+import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseCard from "@/shared/components/BaseCard.vue"
 import BaseSkeleton from "@/shared/components/BaseSkeleton.vue"
 import { useDateFormatter } from "@/shared/composables/useDateFormatter"
@@ -68,7 +69,7 @@ watch(isError, (hasError) => {
 
 <template>
   <main class="min-h-screen flex justify-center p-6">
-    <BaseCard class="w-full max-w-7xl">
+    <BaseCard class="w-full max-w-7xl relative">
       <template #content>
         <!-- Skeleton -->
         <template v-if="isLoadingGetDetail">
@@ -166,16 +167,8 @@ watch(isError, (hasError) => {
           </section>
         </template>
 
-        <!-- ===================== -->
-        <!-- DIVIDER -->
-        <!-- ===================== -->
         <hr class="h-px text-white/10 my-6" />
 
-        <!-- ===================== -->
-        <!-- PARTICIPANT SECTION -->
-        <!-- ===================== -->
-
-        <!-- Skeleton -->
         <div
           v-if="isLoadingGetDetail"
           class="flex flex-col md:flex-row md:flex-wrap gap-5 md:gap-4"
@@ -191,6 +184,12 @@ watch(isError, (hasError) => {
 
         <!-- Real Content -->
         <template v-else-if="orderDetail"> List participants here </template>
+
+        <div class="absolute bottom-5 right-5">
+          <BaseButton>
+            <template #icon> <IconPlus class="w-6 h-6 md:w-8 md:h-8"></IconPlus> </template>
+          </BaseButton>
+        </div>
       </template>
     </BaseCard>
   </main>

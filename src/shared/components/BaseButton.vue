@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, useSlots } from "vue"
 
 import type { ButtonProps } from "../models"
 
@@ -10,12 +10,24 @@ const props = withDefaults(defineProps<ButtonProps>(), {
   fluid: false,
 })
 
+const slots = useSlots()
+
+const isIconOnly = computed(() => {
+  return !props.label && (slots.icon || slots["icon-right"])
+})
+
 const buttonClass = computed(() => [
   // Variant
   props.variant === "primary" ? "bg-accent hover:bg-accent-hover" : "bg-secondary hover:opacity-50",
 
-  // Fluid
+  // Width
   props.fluid ? "w-full" : "md:w-auto",
+
+  // Layout
+  "inline-flex items-center justify-center gap-2",
+
+  // Padding
+  isIconOnly.value ? "p-3" : "px-6 py-3",
 ])
 </script>
 
@@ -24,8 +36,17 @@ const buttonClass = computed(() => [
     :type="props.type"
     :disabled="props.disabled"
     :class="buttonClass"
-    class="px-6 py-3 rounded-full font-semibold transition-transform transform text-primary-text hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white/10 active:translate-y-0"
+    class="rounded-full font-semibold transition-all duration-150 text-primary-text disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-white/10 active:scale-95 cursor-pointer"
   >
-    {{ props.label }}
+    <!-- Left icon -->
+    <slot name="icon" />
+
+    <!-- Label -->
+    <template v-if="props.label">
+      {{ props.label }}
+    </template>
+
+    <!-- Right icon -->
+    <slot name="icon-right" />
   </button>
 </template>
