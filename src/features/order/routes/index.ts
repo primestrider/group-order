@@ -6,17 +6,17 @@ const orderRoutes: RouteRecordRaw[] = [
   {
     path: "/",
     name: OrderPageName.HOME,
-    component: () => import("@/features/order/views/HomeView.vue"),
+    component: () => import("@/features/order/views/OrderDashboardView.vue"),
   },
   {
     path: "/order/create",
-    name: OrderPageName.CREATE_ORDER,
-    component: () => import("@/features/order/views/CreateOrderView.vue"),
+    name: OrderPageName.ORDER_CREATE,
+    component: () => import("@/features/order/views/OrderCreateView.vue"),
   },
   {
-    path: "/order",
-    name: OrderPageName.ORDER,
-    component: () => import("@/features/order/views/OrderView.vue"),
+    path: "/order/:id",
+    name: OrderPageName.ORDER_DETAIL,
+    component: () => import("@/features/order/views/OrderDetailView.vue"),
   },
 ]
 

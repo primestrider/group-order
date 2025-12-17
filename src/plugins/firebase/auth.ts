@@ -1,31 +1,12 @@
-import { type Auth, type User, getAuth, signInAnonymously } from "firebase/auth"
+import { type Auth, type User, getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth"
 
 import { firebaseApp } from "./index"
 
-/**
- * Firebase Auth instance.
- *
- * Will be `null` when Firebase is not initialized
- * (e.g. missing environment variables).
- */
 export const auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null
 
 /**
- * Ensures that the current client is authenticated anonymously.
- *
- * This function should be called once during application bootstrap
- * (before mounting the Vue app) to guarantee that `auth.currentUser`
- * is available when Firebase is enabled.
- *
- * Behavior:
- * - If Firebase is not initialized, it resolves with `null`.
- * - If a user session already exists, it returns the current user.
- * - If no user session exists, it signs in anonymously.
- *
- * @returns A promise that resolves with the authenticated user,
- *          or `null` when Firebase is disabled.
- *
- * @throws {FirebaseError} When anonymous sign-in fails.
+ * Ensures that the current client is authenticated anonymously
+ * and waits until Firebase Auth is fully ready.
  */
 export const ensureAnonymousAuth = async (): Promise<User | null> => {
   if (!auth) {
@@ -33,15 +14,26 @@ export const ensureAnonymousAuth = async (): Promise<User | null> => {
     return null
   }
 
+  // Already signed in
   if (auth.currentUser) {
     return auth.currentUser
   }
 
-  const credential = await signInAnonymously(auth)
+  // Sign in anonymously
+  await signInAnonymously(auth)
 
-  if (!credential.user) {
-    throw new Error("Anonymous authentication failed")
-  }
-
-  return credential.user
+  // 🔑 IMPORTANT: wait until auth state is ready
+  return new Promise((resolve, reject) => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        unsubscribe()
+        resolve(user)
+      },
+      (error) => {
+        unsubscribe()
+        reject(error)
+      },
+    )
+  })
 }

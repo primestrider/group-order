@@ -5,11 +5,12 @@ export enum UtilsPageName {
 }
 
 export type ButtonProps = {
-  label: string
+  label?: string
   type?: "button" | "submit" | "reset"
   disabled?: boolean
   variant?: "primary" | "secondary"
   fluid?: boolean
+  loading?: boolean
 }
 
 export type BaseFormFieldProps = {

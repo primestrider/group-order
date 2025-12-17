@@ -1,10 +1,29 @@
 export enum OrderPageName {
   HOME = "Home",
-  CREATE_ORDER = "CreateOrder",
-
-  ORDER = "Order",
+  ORDER_CREATE = "OrderCreate",
+  ORDER_DETAIL = "OrderDetail",
 }
 
-export type OrderRequestPayload = {
-  name: string
+export type OrderDetailResponse = {
+  id: string
+  orderName: string
+  orderDescription?: string
+  ownerUid: string
+  maxParticipants: number
+  participantsCount: number
+  lastOrderAt: Date
+  createdAt: Date
+}
+
+export type OrderDetailItems = {
+  id: string // userUid (doc id)
+  participantName: string
+  note?: string | null
+  items: {
+    itemName: string
+    quantity: number
+  }[]
+  createdByUid: string
+  createdAt: Date
+  updatedAt?: Date
 }

@@ -7,6 +7,7 @@ import { computed, watch } from "vue"
 import { useRouter } from "vue-router"
 
 import { translate } from "@/plugins/language"
+import { showToast } from "@/plugins/toaster/toast"
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseCard from "@/shared/components/BaseCard.vue"
 import BaseFormField from "@/shared/components/BaseFormField.vue"
@@ -14,7 +15,7 @@ import { useBaseFieldError } from "@/shared/composables/useBaseFieldError"
 import { toDateTimeLocal, toTimestamp } from "@/shared/helpers/date"
 
 import { OrderPageName } from "../models"
-import { type CreateOrderValues, createOrderSchema } from "../models/create-order.schema"
+import { type CreateOrderRequest, createOrderSchema } from "../models/create-order.schema"
 import { createGroupOrder } from "../services/api"
 
 /**
@@ -34,7 +35,7 @@ const nowPlus2Hours = Date.now() + 2 * 60 * 60 * 1000
  * - Partial to allow schema evolution
  * - Automatically synced by VueUse
  */
-const cachedForm = useSessionStorage<Partial<CreateOrderValues>>(CREATE_ORDER_STORAGE_KEY, {})
+const cachedForm = useSessionStorage<Partial<CreateOrderRequest>>(CREATE_ORDER_STORAGE_KEY, {})
 
 /**
  * Router instance
@@ -54,7 +55,7 @@ const {
   values: createOrderForm,
   meta,
   handleSubmit,
-} = useForm<CreateOrderValues>({
+} = useForm<CreateOrderRequest>({
   validationSchema: toTypedSchema(createOrderSchema),
   initialValues: {
     lastOrderAt: nowPlus2Hours,
@@ -67,7 +68,7 @@ const {
  * Supports both client-side and backend errors
  */
 const { fieldError: createOrderFieldError, clearBackendError: clearOrderError } =
-  useBaseFieldError<CreateOrderValues>(createOrderErrors)
+  useBaseFieldError<CreateOrderRequest>(createOrderErrors)
 
 /**
  * Form fields (typed & reactive)
@@ -120,15 +121,16 @@ const { mutate: createOrderMutate, isPending: isLoadingCreate } = useMutation({
     cachedForm.value = {}
 
     // redirect to order detail
-    router.push({
-      name: OrderPageName.ORDER,
+    router.replace({
+      name: OrderPageName.ORDER_DETAIL,
       params: { id: orderId },
     })
   },
 
   onError(error) {
-    // showToast here
-    console.error("Create order failed:", error)
+    if (error) {
+      showToast(translate("features.order.create_order.error"), "error")
+    }
   },
 })
 
