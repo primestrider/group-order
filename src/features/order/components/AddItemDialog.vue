@@ -1,32 +1,62 @@
 <script setup lang="ts">
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from "@headlessui/vue"
 import { IconTrash } from "@tabler/icons-vue"
+import { useMutation } from "@tanstack/vue-query"
 import { toTypedSchema } from "@vee-validate/zod"
+import { useStorage } from "@vueuse/core"
 import { useFieldArray, useForm } from "vee-validate"
+import { ref, watch } from "vue"
+import { useRoute } from "vue-router"
 
 import { translate } from "@/plugins/language"
+import { showToast } from "@/plugins/toaster/toast"
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseFormField from "@/shared/components/BaseFormField.vue"
 import { useBaseFieldError } from "@/shared/composables/useBaseFieldError"
 
 import { type AddItemRequest, addItemSchema } from "../models/add-item.schema"
+import { upsertOrderItem } from "../services/api"
 
 /**
- * v-model for dialog open state
+ * Dialog open state (v-model)
  */
 const open = defineModel<boolean>({ required: true })
 
+const route = useRoute()
+const orderId = route.params.id as string
+
+/**
+ * Draft storage key (scoped per order)
+ */
+const storageKey = `add-item-draft:${orderId}`
+
+/**
+ * Persistent draft state
+ */
+const draft = useStorage<AddItemRequest>(storageKey, {
+  participantName: "",
+  items: [{ itemName: "", quantity: 1 }],
+  note: "",
+})
+
+/**
+ * Internal flag to prevent draft overwrite during submit/reset
+ */
+const isSubmitting = ref(false)
+
+/**
+ * Close modal dialog
+ */
 const close = () => {
   open.value = false
 }
 
+/**
+ * Form setup
+ */
 const { handleSubmit, errors, resetForm, defineField } = useForm<AddItemRequest>({
   validationSchema: toTypedSchema(addItemSchema),
-  initialValues: {
-    participantName: "",
-    items: [{ itemName: "", quantity: 1 }],
-    note: "",
-  },
+  initialValues: draft.value,
 })
 
 const { fieldError: addItemFieldError, clearBackendError: clearItemError } =
@@ -38,25 +68,80 @@ const [note] = defineField("note")
 const { fields: itemFields, push, remove } = useFieldArray<AddItemRequest["items"][number]>("items")
 
 /**
- * Add new item (max 10)
+ * Add new item entry (max 10)
  */
 const addItem = () => {
   if (itemFields.value.length >= 10) return
-
   push({ itemName: "", quantity: 1 })
   clearItemError("items")
 }
 
 /**
+ * Sync form state into persistent draft
+ */
+watch(
+  () => ({
+    participantName: participantName.value,
+    note: note.value,
+    items: itemFields.value.map((f) => f.value),
+  }),
+  (values) => {
+    if (!isSubmitting.value) {
+      draft.value = values
+    }
+  },
+  { deep: true },
+)
+
+/**
+ * Mutation: add order item
+ */
+const { mutate: upsertOrderItemMutate, isPending: isPendingAdd } = useMutation({
+  mutationFn: upsertOrderItem,
+
+  onSuccess() {
+    // Clear persisted draft
+    draft.value = {
+      participantName: "",
+      items: [{ itemName: "", quantity: 1 }],
+      note: "",
+    }
+
+    resetForm()
+    close()
+    showToast(
+      translate("features.order.order_detail.add_item.notification_add_item.success"),
+      "success",
+    )
+  },
+
+  onError(error) {
+    if (error) {
+      console.log(error)
+      showToast(
+        translate("features.order.order_detail.add_item.notification_add_item.error"),
+        "error",
+      )
+    }
+  },
+})
+
+/**
  * Submit handler
  */
 const submit = handleSubmit((values) => {
-  console.log("ADD ITEM PAYLOAD:", values)
-  resetForm()
-  close()
+  isSubmitting.value = true
+
+  upsertOrderItemMutate({
+    orderId,
+    participantName: values.participantName,
+    items: values.items,
+    note: values.note,
+  })
+
+  isSubmitting.value = false
 })
 </script>
-
 <template>
   <TransitionRoot appear :show="open" as="template">
     <Dialog as="div" class="relative z-50" @close="close">
@@ -91,10 +176,9 @@ const submit = handleSubmit((values) => {
               {{ translate("features.order.order_detail.add_item.form.title") }}
             </DialogTitle>
 
-            <!-- ✅ FORM WRAPPER -->
+            <!-- FORM -->
             <form class="flex flex-col flex-1" @submit.prevent="submit">
-              <!-- Content -->
-              <div class="px-4 mt-4 space-y-4">
+              <div class="px-4 mt-4">
                 <!-- Participant Name -->
                 <BaseFormField
                   field-name="participantName"
@@ -107,95 +191,85 @@ const submit = handleSubmit((values) => {
                   <input
                     v-model="participantName"
                     type="text"
+                    :placeholder="
+                      translate(
+                        'features.order.order_detail.add_item.form.participantName.placeholder',
+                      )
+                    "
+                    :disabled="isPendingAdd"
                     @input="clearItemError('participantName')"
                     class="w-full py-3 px-4 rounded-full bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
                   />
                 </BaseFormField>
 
                 <!-- Items -->
-                <div class="space-y-2">
-                  <div class="ml-2 flex items-center justify-between">
-                    <label class="text-sm font-medium text-primary-text/80">
-                      {{ translate("features.order.order_detail.add_item.form.items.label") }}
-                    </label>
 
-                    <button
-                      type="button"
-                      :disabled="itemFields.length >= 10"
-                      class="text-xs flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                      @click="addItem"
-                    >
-                      + {{ translate("features.order.order_detail.add_item.form.button.add_item") }}
-                    </button>
-                  </div>
+                <div class="ml-2 flex items-center justify-between">
+                  <label class="text-sm font-medium text-primary-text/80">
+                    {{ translate("features.order.order_detail.add_item.form.items.label") }}
+                  </label>
 
-                  <div class="max-h-[40vh] overflow-y-auto space-y-3 pr-1">
-                    <div
-                      v-for="(field, index) in itemFields"
-                      :key="field.key"
-                      class="grid grid-cols-12 gap-3 items-center"
-                    >
-                      <!-- Item Name -->
-                      <div class="col-span-7">
-                        <BaseFormField
-                          :field-name="`items.${index}.itemName`"
-                          required
-                          :label="
-                            translate('features.order.order_detail.add_item.form.items.label')
+                  <button
+                    type="button"
+                    class="text-xs flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="itemFields.length >= 10 || isPendingAdd"
+                    @click="addItem"
+                  >
+                    + {{ translate("features.order.order_detail.add_item.form.button.add_item") }}
+                  </button>
+                </div>
+
+                <div class="max-h-[40vh] overflow-y-auto pr-1">
+                  <div
+                    v-for="(field, index) in itemFields"
+                    :key="field.key"
+                    class="grid grid-cols-12 gap-2 items-center"
+                  >
+                    <div class="col-span-7">
+                      <BaseFormField :field-name="`items.${index}.itemName`" required>
+                        <input
+                          v-model="field.value.itemName"
+                          type="text"
+                          :placeholder="
+                            translate('features.order.order_detail.add_item.form.items.placeholder')
                           "
-                        >
-                          <input
-                            v-model="field.value.itemName"
-                            type="text"
-                            @input="clearItemError(`items.${index}.itemName` as any)"
-                            class="w-full py-3 px-4 rounded-full bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
-                          />
-                        </BaseFormField>
-                      </div>
+                          :disabled="isPendingAdd"
+                          @input="clearItemError(`items.${index}.itemName` as any)"
+                          class="w-full py-3 px-4 rounded-full bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
+                        />
+                      </BaseFormField>
+                    </div>
 
-                      <!-- Quantity -->
-                      <div class="col-span-3">
-                        <BaseFormField
-                          :field-name="`items.${index}.quantity`"
-                          required
+                    <div class="col-span-3">
+                      <BaseFormField :field-name="`items.${index}.quantity`" required>
+                        <input
+                          v-model="field.value.quantity"
                           type="number"
                           min="1"
-                          :label="
-                            translate('features.order.order_detail.add_item.form.quantity.label')
-                          "
-                        >
-                          <input
-                            v-model="field.value.quantity"
-                            type="number"
-                            min="1"
-                            @input="clearItemError(`items.${index}.quantity` as any)"
-                            class="w-full py-3 px-4 rounded-full bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
-                          />
-                        </BaseFormField>
-                      </div>
+                          :disabled="isPendingAdd"
+                          @input="clearItemError(`items.${index}.quantity` as any)"
+                          class="w-full py-3 px-4 rounded-full bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
+                        />
+                      </BaseFormField>
+                    </div>
 
-                      <!-- Remove -->
-                      <div class="col-span-2 flex items-end justify-center">
-                        <button
-                          v-if="itemFields.length > 1"
-                          type="button"
-                          class="text-red-400 hover:text-red-300"
-                          @click="
-                            () => {
-                              remove(index)
-                              clearItemError('items')
-                            }
-                          "
-                        >
-                          <IconTrash size="18" />
-                        </button>
-                      </div>
+                    <div class="col-span-2 flex items-end justify-center">
+                      <button
+                        v-if="itemFields.length > 1"
+                        type="button"
+                        class="text-red-400 hover:text-red-300"
+                        :disabled="isPendingAdd"
+                        @click="
+                          () => {
+                            remove(index)
+                            clearItemError('items')
+                          }
+                        "
+                      >
+                        <IconTrash size="18" />
+                      </button>
                     </div>
                   </div>
-
-                  <p v-if="addItemFieldError('items')" class="ml-2 text-sm text-red-400">
-                    {{ addItemFieldError("items") }}
-                  </p>
                 </div>
 
                 <!-- Note -->
@@ -208,6 +282,10 @@ const submit = handleSubmit((values) => {
                   <textarea
                     v-model="note"
                     rows="3"
+                    :placeholder="
+                      translate('features.order.order_detail.add_item.form.note.placeholder')
+                    "
+                    :disabled="isPendingAdd"
                     @input="clearItemError('note')"
                     class="w-full py-3 px-4 rounded-3xl bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
                   />
@@ -220,6 +298,7 @@ const submit = handleSubmit((values) => {
                   type="button"
                   fluid
                   class="bg-accent-dark"
+                  :disabled="isPendingAdd"
                   :label="translate('features.order.order_detail.add_item.form.button.cancel')"
                   @click="close"
                 />
@@ -227,7 +306,7 @@ const submit = handleSubmit((values) => {
                 <BaseButton
                   type="submit"
                   fluid
-                  :loading="true"
+                  :loading="isPendingAdd"
                   :label="translate('features.order.order_detail.add_item.form.button.confirm')"
                 />
               </div>

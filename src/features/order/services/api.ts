@@ -1,9 +1,18 @@
-import { Timestamp, addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore"
+import {
+  Timestamp,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore"
 
 import { firebaseDb } from "@/plugins/firebase"
 import { auth } from "@/plugins/firebase/auth"
 
 import type { OrderDetailResponse } from "../models"
+import type { AddOrderItemPayload } from "../models/add-item.schema"
 import type { CreateOrderRequest } from "../models/create-order.schema"
 
 /**
@@ -81,4 +90,47 @@ export const getDetailOrder = async (id: string): Promise<OrderDetailResponse> =
     lastOrderAt: response.lastOrderAt.toDate(),
     createdAt: response.createdAt.toDate(),
   }
+}
+
+/**
+ * Create or update user's order item
+ *
+ * - One item per user per order
+ * - User can edit their own item
+ */
+export const upsertOrderItem = async (payload: AddOrderItemPayload): Promise<void> => {
+  if (!firebaseDb) {
+    throw new Error("Firebase is not initialized")
+  }
+
+  if (!auth?.currentUser) {
+    throw new Error("User is not authenticated")
+  }
+
+  const uid = auth.currentUser.uid
+
+  const itemRef = doc(
+    firebaseDb,
+    "orders",
+    payload.orderId,
+    "items",
+    uid, // 🔑 UID as doc ID
+  )
+
+  await setDoc(
+    itemRef,
+    {
+      participantName: payload.participantName,
+      note: payload.note ?? null,
+      items: payload.items,
+
+      // immutable audit fields
+      createdBy: uid,
+      updatedAt: serverTimestamp(),
+
+      // only set on first create
+      createdAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
 }

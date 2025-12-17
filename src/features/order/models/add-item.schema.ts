@@ -45,3 +45,7 @@ export const addItemSchema = z.object({
 })
 
 export type AddItemRequest = z.infer<typeof addItemSchema>
+
+export type AddOrderItemPayload = AddItemRequest & {
+  orderId: string
+}

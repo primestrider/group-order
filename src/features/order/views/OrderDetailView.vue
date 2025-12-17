@@ -199,6 +199,6 @@ const handleOpenAddItem = (): void => {
       </template>
     </BaseCard>
 
-    <AddItemDialog v-model="isOpenAddItem"></AddItemDialog>
+    <AddItemDialog v-model="isOpenAddItem" :order-id="orderId"></AddItemDialog>
   </main>
 </template>

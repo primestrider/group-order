@@ -44,6 +44,7 @@ export default {
 
         items: {
           label: "Items",
+          placeholder: "Enter item name",
         },
 
         quantity: {
@@ -60,6 +61,11 @@ export default {
           confirm: "Confirm",
           cancel: "Cancel",
         },
+      },
+
+      notification_add_item: {
+        success: "Success adding your items to the order.",
+        error: "Error when trying to add your items, please try again later.",
       },
     },
   },
