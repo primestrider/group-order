@@ -5,6 +5,7 @@ import { useClipboard, useShare } from "@vueuse/core"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
+import { auth } from "@/plugins/firebase/auth"
 import { translate } from "@/plugins/language"
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseCard from "@/shared/components/BaseCard.vue"
@@ -76,6 +77,10 @@ const handleOpenAddItem = (): void => {
 const orderItems = ref<OrderDetailItems[]>([])
 
 let unsubscribeOrderItems: (() => void) | null = null
+
+const isMyItem = (item: OrderDetailItems): boolean => {
+  return !!auth?.currentUser && item.id === auth.currentUser.uid
+}
 
 onMounted(() => {
   unsubscribeOrderItems = listenOrderItemsRealtime(orderId, (data) => {
@@ -210,7 +215,12 @@ onUnmounted(() => {
             <article
               v-for="item in orderItems"
               :key="item.id"
-              class="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col gap-3 hover:border-white/20 transition"
+              :class="[
+                'rounded-2xl p-4 flex flex-col gap-3 transition border',
+                isMyItem(item)
+                  ? 'border-green-400/40 bg-green-400/10'
+                  : 'border-white/10 bg-white/5 hover:border-white/20',
+              ]"
             >
               <!-- Header -->
               <div class="flex items-start justify-between gap-3">
@@ -220,6 +230,12 @@ onUnmounted(() => {
                   </h3>
                   <p class="text-xs text-primary-text/50">User ID: {{ item.id }}</p>
                 </div>
+                <span
+                  v-if="isMyItem(item)"
+                  class="text-xs px-2 py-1 rounded-full bg-green-400/20 text-green-300 border border-green-400/30"
+                >
+                  You
+                </span>
               </div>
 
               <!-- Items list -->
