@@ -2,7 +2,7 @@
 import { IconClipboardCopy, IconPlus, IconShare, IconUsers } from "@tabler/icons-vue"
 import { useQuery } from "@tanstack/vue-query"
 import { useClipboard, useShare } from "@vueuse/core"
-import { computed, ref, watch } from "vue"
+import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { translate } from "@/plugins/language"
@@ -13,7 +13,8 @@ import { useDateFormatter } from "@/shared/composables/useDateFormatter"
 import { UtilsPageName } from "@/shared/models"
 
 import AddItemDialog from "../components/AddItemDialog.vue"
-import { getDetailOrder } from "../services/api"
+import { type OrderDetailItems } from "../models"
+import { getDetailOrder, listenOrderItemsRealtime } from "../services/api"
 
 const route = useRoute()
 const router = useRouter()
@@ -71,6 +72,20 @@ const isOpenAddItem = ref<boolean>(false)
 const handleOpenAddItem = (): void => {
   isOpenAddItem.value = true
 }
+
+const orderItems = ref<OrderDetailItems[]>([])
+
+let unsubscribeOrderItems: (() => void) | null = null
+
+onMounted(() => {
+  unsubscribeOrderItems = listenOrderItemsRealtime(orderId, (data) => {
+    orderItems.value = data
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeOrderItems?.()
+})
 </script>
 
 <template>
@@ -116,7 +131,7 @@ const handleOpenAddItem = (): void => {
                 >
                   <IconUsers class="w-4 h-4 opacity-80" />
                   <span>
-                    {{ orderDetail.participantsCount }}
+                    {{ orderItems.length }}
                     /
                     {{ orderDetail.maxParticipants }}
                   </span>
@@ -189,7 +204,53 @@ const handleOpenAddItem = (): void => {
         </div>
 
         <!-- Real Content -->
-        <template v-else-if="orderDetail"> List participants here </template>
+        <template v-else-if="orderDetail">
+          <!-- list items -->
+          <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <article
+              v-for="item in orderItems"
+              :key="item.id"
+              class="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col gap-3 hover:border-white/20 transition"
+            >
+              <!-- Header -->
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-base font-semibold text-primary-text">
+                    {{ item.participantName }}
+                  </h3>
+                  <p class="text-xs text-primary-text/50">User ID: {{ item.id }}</p>
+                </div>
+              </div>
+
+              <!-- Items list -->
+              <ul class="space-y-1 text-sm text-primary-text/80">
+                <li v-for="i in item.items" :key="i.itemName" class="flex justify-between gap-2">
+                  <span class="truncate">
+                    {{ i.itemName }}
+                  </span>
+                  <span class="font-medium"> × {{ i.quantity }} </span>
+                </li>
+              </ul>
+
+              <!-- Note -->
+              <div
+                v-if="item.note"
+                class="text-sm text-primary-text/60 border-t border-white/10 pt-2"
+              >
+                <span class="italic">Note:</span>
+                {{ item.note }}
+              </div>
+
+              <!-- Footer -->
+              <div class="mt-auto flex items-center justify-between text-xs text-primary-text/40">
+                <span> Added by: {{ item.createdByUid }} </span>
+                <span v-if="item.createdAt">
+                  {{ formatDateTime(item.createdAt) }}
+                </span>
+              </div>
+            </article>
+          </section>
+        </template>
 
         <div class="absolute bottom-5 right-5">
           <BaseButton @click="handleOpenAddItem">

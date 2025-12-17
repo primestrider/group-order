@@ -1,9 +1,12 @@
 import {
   Timestamp,
+  type Unsubscribe,
   addDoc,
   collection,
   doc,
   getDoc,
+  onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore"
@@ -11,7 +14,7 @@ import {
 import { firebaseDb } from "@/plugins/firebase"
 import { auth } from "@/plugins/firebase/auth"
 
-import type { OrderDetailResponse } from "../models"
+import type { OrderDetailItems, OrderDetailResponse } from "../models"
 import type { AddOrderItemPayload } from "../models/add-item.schema"
 import type { CreateOrderRequest } from "../models/create-order.schema"
 
@@ -99,38 +102,77 @@ export const getDetailOrder = async (id: string): Promise<OrderDetailResponse> =
  * - User can edit their own item
  */
 export const upsertOrderItem = async (payload: AddOrderItemPayload): Promise<void> => {
-  if (!firebaseDb) {
-    throw new Error("Firebase is not initialized")
-  }
-
-  if (!auth?.currentUser) {
-    throw new Error("User is not authenticated")
+  if (!firebaseDb || !auth?.currentUser) {
+    throw new Error("Firebase not ready")
   }
 
   const uid = auth.currentUser.uid
 
-  const itemRef = doc(
-    firebaseDb,
-    "orders",
-    payload.orderId,
-    "items",
-    uid, // 🔑 UID as doc ID
-  )
+  const itemRef = doc(firebaseDb, "orders", payload.orderId, "items", uid)
 
-  await setDoc(
-    itemRef,
-    {
+  const snap = await getDoc(itemRef)
+
+  if (snap.exists()) {
+    // � UPDATE
+    await setDoc(
+      itemRef,
+      {
+        participantName: payload.participantName,
+        note: payload.note ?? null,
+        items: payload.items,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  } else {
+    // � CREATE
+    await setDoc(itemRef, {
       participantName: payload.participantName,
       note: payload.note ?? null,
       items: payload.items,
-
-      // immutable audit fields
-      createdBy: uid,
-      updatedAt: serverTimestamp(),
-
-      // only set on first create
+      createdByUid: uid,
       createdAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
+    })
+  }
+}
+
+/**
+ * Listen realtime updates for order items
+ *
+ * - Realtime updates when users add/edit items
+ * - One document per user (docId = userUid)
+ *
+ * @param orderId - Target order ID
+ * @param onChange - Callback when data changes
+ * @returns unsubscribe function
+ */
+export const listenOrderItemsRealtime = (
+  orderId: string,
+  onChange: (items: OrderDetailItems[]) => void,
+): Unsubscribe => {
+  if (!firebaseDb) {
+    throw new Error("Firebase is not initialized")
+  }
+
+  const itemsRef = collection(firebaseDb, "orders", orderId, "items")
+
+  const q = query(itemsRef)
+
+  return onSnapshot(q, (snapshot) => {
+    const items: OrderDetailItems[] = snapshot.docs.map((doc) => {
+      const data = doc.data()
+
+      return {
+        id: doc.id, // == userUid
+        participantName: data.participantName,
+        note: data.note ?? null,
+        items: data.items ?? [],
+        createdByUid: data.createdByUid,
+        createdAt: data.createdAt?.toDate?.() ?? new Date(),
+        updatedAt: data.updatedAt?.toDate?.(),
+      }
+    })
+
+    onChange(items)
+  })
 }

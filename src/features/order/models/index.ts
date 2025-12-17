@@ -14,3 +14,16 @@ export type OrderDetailResponse = {
   lastOrderAt: Date
   createdAt: Date
 }
+
+export type OrderDetailItems = {
+  id: string // userUid (doc id)
+  participantName: string
+  note?: string | null
+  items: {
+    itemName: string
+    quantity: number
+  }[]
+  createdByUid: string
+  createdAt: Date
+  updatedAt?: Date
+}
