@@ -36,6 +36,30 @@ export default {
     add_item: {
       form: {
         title: "Add Your Items",
+
+        participantName: {
+          label: "Your name",
+          placeholder: "Enter your name",
+        },
+
+        items: {
+          label: "Items",
+        },
+
+        quantity: {
+          label: "Quantity",
+        },
+
+        note: {
+          label: "Note",
+          placeholder: "Enter notes",
+        },
+
+        button: {
+          add_item: "Add Item",
+          confirm: "Confirm",
+          cancel: "Cancel",
+        },
       },
     },
   },

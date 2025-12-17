@@ -32,4 +32,4 @@ export const createOrderSchema = z.object({
     }),
 })
 
-export type CreateOrderValues = z.infer<typeof createOrderSchema>
+export type CreateOrderRequest = z.infer<typeof createOrderSchema>

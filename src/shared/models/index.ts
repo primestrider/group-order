@@ -10,6 +10,7 @@ export type ButtonProps = {
   disabled?: boolean
   variant?: "primary" | "secondary"
   fluid?: boolean
+  loading?: boolean
 }
 
 export type BaseFormFieldProps = {

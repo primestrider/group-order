@@ -6,12 +6,17 @@ import type { Ref } from "vue"
  *
  * Helper composable to merge:
  * - Client-side validation errors (vee-validate)
- * - Backend error (single field)
+ * - Backend error (single top-level field only)
  *
- * Rules:
- * - Backend error has higher priority
- * - Backend error applies to only one field
- * - Backend error is cleared when user edits that field
+ * DESIGN RULES:
+ * - Backend error is allowed ONLY on top-level form fields (keyof T)
+ * - Nested paths (e.g. `items.0.name`) are NOT supported by design
+ * - Dynamic field array validation is handled by vee-validate
+ * - Backend error always has higher priority than client-side error
+ *
+ * RECOMMENDED USAGE:
+ * - Use this composable ONLY for backend errors
+ * - Clear backend error when user edits the related top-level field
  *
  * @template T - Form values type
  *
@@ -22,18 +27,25 @@ export const useBaseFieldError = <T extends Record<string, unknown>>(
 ) => {
   /**
    * Backend error message.
+   * Only one backend error is supported at a time.
    */
   const serverError = ref<string | null>(null)
 
   /**
-   * Field name that the backend error belongs to.
+   * Target top-level field that the backend error belongs to.
+   *
+   * IMPORTANT:
+   * This MUST be a top-level field key of the form (keyof T).
+   * Do NOT use nested paths such as `items.0.itemName`.
    */
   const errorTargetField = ref<keyof T | null>(null)
 
   /**
-   * Assign backend error to a specific field.
+   * Assign backend error to a specific top-level field.
    *
-   * @param field - Target field name
+   * Backend error has higher priority than client-side validation error.
+   *
+   * @param field - Target top-level field name (keyof T)
    * @param message - Backend error message
    */
   const setBackendError = (field: keyof T, message: string) => {
@@ -42,9 +54,13 @@ export const useBaseFieldError = <T extends Record<string, unknown>>(
   }
 
   /**
-   * Clear backend error when user edits the field.
+   * Clear backend error when user edits the related field.
    *
-   * @param field - Edited field name
+   * NOTE:
+   * This should be called ONLY with a top-level field name.
+   * Clearing nested paths is intentionally NOT supported.
+   *
+   * @param field - Edited top-level field name (keyof T)
    */
   const clearBackendError = (field: keyof T) => {
     if (errorTargetField.value === field) {
@@ -57,16 +73,19 @@ export const useBaseFieldError = <T extends Record<string, unknown>>(
    * Resolve error message for a field.
    *
    * Priority:
-   * 1. Backend error
-   * 2. Client-side validation error
+   * 1. Backend error (if field matches errorTargetField)
+   * 2. Client-side validation error (vee-validate)
    *
-   * @param field - Field name
+   * @param field - Target top-level field name
    * @returns Error message or undefined
    */
-  const fieldError = <K extends keyof T>(field: K) =>
-    errorTargetField.value === field
-      ? (serverError.value ?? clientErrors.value[field])
-      : clientErrors.value[field]
+  const fieldError = <K extends keyof T>(field: K): string | undefined => {
+    if (errorTargetField.value === field) {
+      return serverError.value ?? clientErrors.value[field]
+    }
+
+    return clientErrors.value[field]
+  }
 
   return {
     serverError,

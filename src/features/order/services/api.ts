@@ -4,7 +4,7 @@ import { firebaseDb } from "@/plugins/firebase"
 import { auth } from "@/plugins/firebase/auth"
 
 import type { OrderDetailResponse } from "../models"
-import type { CreateOrderValues } from "../models/create-order.schema"
+import type { CreateOrderRequest } from "../models/create-order.schema"
 
 /**
  * Creates a new group order in Firestore.
@@ -20,7 +20,7 @@ import type { CreateOrderValues } from "../models/create-order.schema"
  *
  * @throws {Error} If the user is not authenticated
  */
-export const createGroupOrder = async (payload: CreateOrderValues): Promise<string> => {
+export const createGroupOrder = async (payload: CreateOrderRequest): Promise<string> => {
   if (!auth?.currentUser) {
     throw new Error("User is not authenticated")
   }

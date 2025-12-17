@@ -15,7 +15,7 @@ import { useBaseFieldError } from "@/shared/composables/useBaseFieldError"
 import { toDateTimeLocal, toTimestamp } from "@/shared/helpers/date"
 
 import { OrderPageName } from "../models"
-import { type CreateOrderValues, createOrderSchema } from "../models/create-order.schema"
+import { type CreateOrderRequest, createOrderSchema } from "../models/create-order.schema"
 import { createGroupOrder } from "../services/api"
 
 /**
@@ -35,7 +35,7 @@ const nowPlus2Hours = Date.now() + 2 * 60 * 60 * 1000
  * - Partial to allow schema evolution
  * - Automatically synced by VueUse
  */
-const cachedForm = useSessionStorage<Partial<CreateOrderValues>>(CREATE_ORDER_STORAGE_KEY, {})
+const cachedForm = useSessionStorage<Partial<CreateOrderRequest>>(CREATE_ORDER_STORAGE_KEY, {})
 
 /**
  * Router instance
@@ -55,7 +55,7 @@ const {
   values: createOrderForm,
   meta,
   handleSubmit,
-} = useForm<CreateOrderValues>({
+} = useForm<CreateOrderRequest>({
   validationSchema: toTypedSchema(createOrderSchema),
   initialValues: {
     lastOrderAt: nowPlus2Hours,
@@ -68,7 +68,7 @@ const {
  * Supports both client-side and backend errors
  */
 const { fieldError: createOrderFieldError, clearBackendError: clearOrderError } =
-  useBaseFieldError<CreateOrderValues>(createOrderErrors)
+  useBaseFieldError<CreateOrderRequest>(createOrderErrors)
 
 /**
  * Form fields (typed & reactive)
