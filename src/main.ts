@@ -30,4 +30,4 @@ async function bootstrap() {
   app.mount("#app")
 }
 
-await bootstrap()
+bootstrap()
