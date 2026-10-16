@@ -35,12 +35,34 @@ export default {
         placeholder: "Pilih tanggal dan jam batas order",
       },
 
+      extraFee: {
+        label: "Ongkir / Biaya Tambahan (Rp)",
+        hint: "Dibagi rata ke semua peserta",
+      },
+
+      paymentInfo: {
+        label: "Info Pembayaran",
+        placeholder: "Contoh: BCA 1234567890 a.n. Budi / GoPay 0812...",
+      },
+
+      menu: {
+        label: "Menu / Item Tersedia",
+        hint: "Opsional. Peserta bisa memilih item ini dan harganya terisi otomatis.",
+        add: "Tambah Menu",
+      },
+
       button: {
         submit: "Buat Order",
       },
     },
 
     error: "Gagal membuat order, silakan coba lagi nanti.",
+  },
+
+  my_orders: {
+    title: "Order Saya",
+    empty: "Kamu belum membuat order di perangkat ini.",
+    error: "Gagal memuat order kamu.",
   },
 
   join_order: {
@@ -58,10 +80,47 @@ export default {
     note: "Catatan:",
     empty: "Belum ada pesanan. Jadilah yang pertama menambahkan pesanan!",
 
+    status: {
+      open: "Dibuka",
+      closed: "Ditutup",
+    },
+
+    payment: {
+      paid: "Lunas",
+      mark_paid: "Tandai lunas",
+      mark_unpaid: "Batalkan lunas",
+      to_pay: "Harus bayar",
+      per_person: "per orang",
+    },
+
+    manage: {
+      edit: "Edit order",
+      edit_title: "Edit Order",
+      save: "Simpan",
+      close: "Tutup order",
+      reopen: "Buka lagi",
+      reopen_hint: "Ubah batas order ke waktu yang akan datang (Edit order) untuk membuka lagi.",
+      leave: "Batal ikut",
+      remove: "Keluarkan",
+      confirm_leave: "Batal ikut order ini? Pesananmu akan dihapus.",
+      confirm_remove: "Keluarkan peserta",
+
+      notification: {
+        updated: "Order berhasil diperbarui.",
+        closed: "Order ditutup.",
+        reopened: "Order dibuka lagi.",
+        removed: "Peserta dikeluarkan dari order.",
+        max_below_participants:
+          "Maksimal peserta tidak boleh lebih kecil dari jumlah peserta yang sudah ikut.",
+        error: "Terjadi kesalahan, silakan coba lagi nanti.",
+      },
+    },
+
     recap: {
       title: "Rekap Order",
       owner_only: "Hanya terlihat oleh pembuat order",
       total: "Total item",
+      grand_total: "Total bayar",
       participants: "Per peserta",
       copy: "Salin rekap",
       copied: "Tersalin",
@@ -86,6 +145,12 @@ export default {
           label: "Jumlah",
         },
 
+        price: {
+          label: "Harga satuan (Rp)",
+          placeholder: "Harga",
+          total: "Total",
+        },
+
         note: {
           label: "Catatan",
           placeholder: "Masukkan catatan",
@@ -94,6 +159,7 @@ export default {
         button: {
           add_item: "Tambah Item",
           confirm: "Simpan",
+          remove_item: "Hapus item",
           cancel: "Batal",
         },
       },
@@ -101,7 +167,7 @@ export default {
       notification_add_item: {
         success: "Berhasil menambahkan pesananmu ke order.",
         error: "Gagal menambahkan pesananmu, silakan coba lagi nanti.",
-        closed: "Order ini sudah ditutup, batas waktu order telah lewat.",
+        closed: "Order ini sudah ditutup.",
         full: "Order ini sudah mencapai batas maksimal peserta.",
       },
     },

@@ -1,22 +1,49 @@
 <script setup lang="ts">
-import { IconClipboardCopy, IconPlus, IconShare, IconUsers } from "@tabler/icons-vue"
-import { useQuery } from "@tanstack/vue-query"
+import {
+  IconCash,
+  IconCircleCheck,
+  IconClipboardCopy,
+  IconLock,
+  IconLockOpen,
+  IconPencil,
+  IconPlus,
+  IconShare,
+  IconTrash,
+  IconUsers,
+} from "@tabler/icons-vue"
+import { useMutation } from "@tanstack/vue-query"
 import { useClipboard, useNow, useShare } from "@vueuse/core"
-import { computed, onMounted, onUnmounted, ref, watch } from "vue"
+import { computed, onMounted, onUnmounted, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { auth } from "@/plugins/firebase/auth"
 import { translate } from "@/plugins/language"
+import { showToast } from "@/plugins/toaster/toast"
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseCard from "@/shared/components/BaseCard.vue"
 import BaseSkeleton from "@/shared/components/BaseSkeleton.vue"
 import { useDateFormatter } from "@/shared/composables/useDateFormatter"
+import { formatRupiah } from "@/shared/helpers/currency"
 import { UtilsPageName } from "@/shared/models"
 
 import AddItemDialog from "../components/AddItemDialog.vue"
+import EditOrderDialog from "../components/EditOrderDialog.vue"
 import OrderRecap from "../components/OrderRecap.vue"
-import { type OrderDetailItems } from "../models"
-import { getDetailOrder, listenOrderItemsRealtime } from "../services/api"
+import { isOrderOpen } from "../helpers/order"
+import { extraFeeShare, participantTotal } from "../helpers/recap"
+import {
+  type OrderDetailItems,
+  type OrderDetailResponse,
+  OrderItemError,
+  OrderStatus,
+} from "../models"
+import {
+  listenOrderDetailRealtime,
+  listenOrderItemsRealtime,
+  removeOrderItem,
+  setOrderItemPaid,
+  setOrderStatus,
+} from "../services/api"
 
 const route = useRoute()
 const router = useRouter()
@@ -52,31 +79,28 @@ const handleShareLink = async (): Promise<void> => {
   })
 }
 
-const { formatDateTime } = useDateFormatter()
+const { formatDateTime, formatRelativeTime } = useDateFormatter()
 
-const {
-  data: orderDetail,
-  isLoading: isLoadingGetDetail,
-  isError,
-} = useQuery({
-  queryKey: ["order", orderId],
-  queryFn: () => getDetailOrder(orderId),
-  enabled: !!orderId,
-})
+/**
+ * Order detail (realtime, so status / deadline edits by the owner show up immediately)
+ */
+const orderDetail = ref<OrderDetailResponse | null>(null)
+const isLoadingGetDetail = ref<boolean>(true)
 
-watch(isError, (hasError) => {
-  if (hasError) {
-    router.replace({ name: UtilsPageName.PAGE_NOT_FOUND })
-  }
-})
+const redirectNotFound = (): void => {
+  router.replace({ name: UtilsPageName.PAGE_NOT_FOUND })
+}
 
 const isOpenAddItem = ref<boolean>(false)
 const handleOpenAddItem = (): void => {
   isOpenAddItem.value = true
 }
 
+const isOpenEditOrder = ref<boolean>(false)
+
 const orderItems = ref<OrderDetailItems[]>([])
 
+let unsubscribeOrderDetail: (() => void) | null = null
 let unsubscribeOrderItems: (() => void) | null = null
 
 const isMyItem = (item: OrderDetailItems): boolean => {
@@ -89,7 +113,7 @@ const isMyItem = (item: OrderDetailItems): boolean => {
 const myItem = computed(() => orderItems.value.find(isMyItem) ?? null)
 
 /**
- * Order creator sees the item recap
+ * Order creator manages the order and sees the recap
  */
 const isOwner = computed(
   () => !!auth?.currentUser && orderDetail.value?.ownerUid === auth.currentUser.uid,
@@ -101,7 +125,7 @@ const isOwner = computed(
 const now = useNow({ interval: 30_000 })
 
 const isOrderClosed = computed(
-  () => !!orderDetail.value && orderDetail.value.lastOrderAt.getTime() <= now.value.getTime(),
+  () => !!orderDetail.value && !isOrderOpen(orderDetail.value, now.value.getTime()),
 )
 
 const isOrderFull = computed(
@@ -121,13 +145,107 @@ const addItemBlockedReason = computed<string | null>(() => {
   return null
 })
 
+/**
+ * Deadline already passed (owner must move it to reopen)
+ */
+const isPastDeadline = computed(
+  () => !!orderDetail.value && orderDetail.value.lastOrderAt.getTime() <= now.value.getTime(),
+)
+
+const feeShare = computed(() =>
+  extraFeeShare(orderDetail.value?.extraFee ?? 0, orderItems.value.length),
+)
+
+const totalFor = (item: OrderDetailItems): number =>
+  participantTotal(item, orderDetail.value?.extraFee ?? 0, orderItems.value.length)
+
+const showManageError = (error: Error): void => {
+  showToast(
+    error.message === OrderItemError.CLOSED
+      ? translate("features.order.order_detail.add_item.notification_add_item.closed")
+      : translate("features.order.order_detail.manage.notification.error"),
+    "error",
+  )
+}
+
+/**
+ * Owner: close early / reopen
+ */
+const { mutate: setStatusMutate, isPending: isPendingStatus } = useMutation({
+  mutationFn: setOrderStatus,
+  onSuccess(_, { status }) {
+    showToast(
+      translate(
+        status === OrderStatus.CLOSED
+          ? "features.order.order_detail.manage.notification.closed"
+          : "features.order.order_detail.manage.notification.reopened",
+      ),
+      "success",
+    )
+  },
+  onError: showManageError,
+})
+
+const handleToggleStatus = (): void => {
+  if (!orderDetail.value) return
+
+  setStatusMutate({
+    orderId,
+    status: orderDetail.value.status === OrderStatus.CLOSED ? OrderStatus.OPEN : OrderStatus.CLOSED,
+  })
+}
+
+/**
+ * Participant leaves / owner removes a participant
+ */
+const { mutate: removeItemMutate, isPending: isPendingRemove } = useMutation({
+  mutationFn: removeOrderItem,
+  onSuccess() {
+    showToast(translate("features.order.order_detail.manage.notification.removed"), "success")
+  },
+  onError: showManageError,
+})
+
+const handleRemoveItem = (item: OrderDetailItems): void => {
+  const message = isMyItem(item)
+    ? translate("features.order.order_detail.manage.confirm_leave")
+    : `${translate("features.order.order_detail.manage.confirm_remove")} ${item.participantName}?`
+
+  if (!globalThis.confirm(message)) return
+
+  removeItemMutate({ orderId, participantUid: item.id })
+}
+
+/**
+ * Owner: mark paid / unpaid
+ */
+const { mutate: setPaidMutate } = useMutation({
+  mutationFn: setOrderItemPaid,
+  onError: showManageError,
+})
+
 onMounted(() => {
+  unsubscribeOrderDetail = listenOrderDetailRealtime(
+    orderId,
+    (order) => {
+      if (!order) {
+        redirectNotFound()
+        return
+      }
+
+      orderDetail.value = order
+      isLoadingGetDetail.value = false
+    },
+    redirectNotFound,
+  )
+
   unsubscribeOrderItems = listenOrderItemsRealtime(orderId, (data) => {
     orderItems.value = data
   })
 })
 
 onUnmounted(() => {
+  unsubscribeOrderDetail?.()
   unsubscribeOrderItems?.()
 })
 </script>
@@ -153,14 +271,51 @@ onUnmounted(() => {
         <template v-else-if="orderDetail">
           <section class="space-y-4 text-primary-text">
             <!-- Title -->
-            <h1 class="text-2xl md:text-3xl font-bold leading-tight">
-              {{ orderDetail.orderName }}
-            </h1>
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <h1 class="text-2xl md:text-3xl font-bold leading-tight break-words">
+                {{ orderDetail.orderName }}
+              </h1>
+
+              <!-- Owner actions -->
+              <div v-if="isOwner" class="flex flex-wrap gap-2 shrink-0">
+                <button
+                  type="button"
+                  class="text-sm flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition"
+                  @click="isOpenEditOrder = true"
+                >
+                  <IconPencil class="w-4 h-4" />
+                  {{ translate("features.order.order_detail.manage.edit") }}
+                </button>
+
+                <button
+                  type="button"
+                  class="text-sm flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="
+                    isPendingStatus || (orderDetail.status === OrderStatus.CLOSED && isPastDeadline)
+                  "
+                  :title="
+                    orderDetail.status === OrderStatus.CLOSED && isPastDeadline
+                      ? translate('features.order.order_detail.manage.reopen_hint')
+                      : undefined
+                  "
+                  @click="handleToggleStatus"
+                >
+                  <template v-if="orderDetail.status === OrderStatus.CLOSED">
+                    <IconLockOpen class="w-4 h-4" />
+                    {{ translate("features.order.order_detail.manage.reopen") }}
+                  </template>
+                  <template v-else>
+                    <IconLock class="w-4 h-4" />
+                    {{ translate("features.order.order_detail.manage.close") }}
+                  </template>
+                </button>
+              </div>
+            </div>
 
             <!-- Description -->
             <p
               v-if="orderDetail.orderDescription"
-              class="text-sm md:text-base text-primary-text/70 max-w-2xl"
+              class="text-sm md:text-base text-primary-text/70 max-w-2xl whitespace-pre-line"
             >
               {{ orderDetail.orderDescription }}
             </p>
@@ -169,6 +324,24 @@ onUnmounted(() => {
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <!-- Meta Chips -->
               <div class="flex flex-wrap items-center gap-3 text-sm">
+                <!-- Status -->
+                <div
+                  :class="[
+                    'px-3 py-1.5 rounded-full border',
+                    isOrderClosed
+                      ? 'bg-red-400/10 border-red-400/30 text-red-300'
+                      : 'bg-green-400/10 border-green-400/30 text-green-300',
+                  ]"
+                >
+                  {{
+                    translate(
+                      isOrderClosed
+                        ? "features.order.order_detail.status.closed"
+                        : "features.order.order_detail.status.open",
+                    )
+                  }}
+                </div>
+
                 <!-- Participants -->
                 <div
                   class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
@@ -184,9 +357,26 @@ onUnmounted(() => {
                 <!-- Last Order Date -->
                 <div
                   class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-primary-text/80"
+                  :title="formatDateTime(orderDetail.lastOrderAt)"
                 >
                   {{ translate("features.order.create_order.form.lastOrderAt.label") }}
                   {{ formatDateTime(orderDetail.lastOrderAt) }}
+                  <span v-if="!isPastDeadline" class="text-primary-text/60">
+                    ({{ formatRelativeTime(orderDetail.lastOrderAt) }})
+                  </span>
+                </div>
+
+                <!-- Extra fee -->
+                <div
+                  v-if="orderDetail.extraFee"
+                  class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-primary-text/80"
+                >
+                  {{ translate("features.order.create_order.form.extraFee.label") }}
+                  {{ formatRupiah(orderDetail.extraFee) }}
+                  <span v-if="orderItems.length" class="text-primary-text/60">
+                    ({{ formatRupiah(feeShare) }}
+                    {{ translate("features.order.order_detail.payment.per_person") }})
+                  </span>
                 </div>
               </div>
 
@@ -200,7 +390,8 @@ onUnmounted(() => {
                     type="text"
                     readonly
                     :value="shareLink"
-                    class="flex-1 px-3 py-1.5 bg-transparent text-sm text-primary-text/80 outline-none select-all"
+                    :aria-label="translate('features.order.order_detail.share_link')"
+                    class="flex-1 min-w-0 px-3 py-1.5 bg-transparent text-sm text-primary-text/80 outline-none select-all"
                   />
 
                   <!-- Divider -->
@@ -229,6 +420,41 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
+
+            <!-- Menu (available items) -->
+            <div v-if="orderDetail.menu.length" class="space-y-2">
+              <h2 class="text-sm font-semibold">
+                {{ translate("features.order.create_order.form.menu.label") }}
+              </h2>
+              <ul class="flex flex-wrap gap-2 text-sm">
+                <li
+                  v-for="menuItem in orderDetail.menu"
+                  :key="menuItem.itemName"
+                  class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+                >
+                  {{ menuItem.itemName }}
+                  <span v-if="menuItem.price" class="text-primary-text/60">
+                    · {{ formatRupiah(menuItem.price) }}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Payment info -->
+            <div
+              v-if="orderDetail.paymentInfo"
+              class="flex gap-3 items-start rounded-2xl p-3 bg-white/5 border border-white/10 text-sm"
+            >
+              <IconCash class="w-5 h-5 shrink-0 opacity-80" />
+              <div>
+                <p class="font-semibold">
+                  {{ translate("features.order.create_order.form.paymentInfo.label") }}
+                </p>
+                <p class="text-primary-text/80 whitespace-pre-line break-words">
+                  {{ orderDetail.paymentInfo }}
+                </p>
+              </div>
+            </div>
           </section>
         </template>
 
@@ -254,6 +480,7 @@ onUnmounted(() => {
             class="mb-6"
             :order-name="orderDetail.orderName"
             :order-items="orderItems"
+            :extra-fee="orderDetail.extraFee"
           />
 
           <!-- list items -->
@@ -278,12 +505,20 @@ onUnmounted(() => {
                 <h3 class="text-base font-semibold text-primary-text break-words">
                   {{ item.participantName }}
                 </h3>
-                <span
-                  v-if="isMyItem(item)"
-                  class="text-xs px-2 py-1 rounded-full bg-green-400/20 text-green-300 border border-green-400/30"
-                >
-                  {{ translate("features.order.order_detail.you") }}
-                </span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span
+                    v-if="item.isPaid"
+                    class="text-xs px-2 py-1 rounded-full bg-accent/30 text-primary-text border border-accent/50"
+                  >
+                    {{ translate("features.order.order_detail.payment.paid") }}
+                  </span>
+                  <span
+                    v-if="isMyItem(item)"
+                    class="text-xs px-2 py-1 rounded-full bg-green-400/20 text-green-300 border border-green-400/30"
+                  >
+                    {{ translate("features.order.order_detail.you") }}
+                  </span>
+                </div>
               </div>
 
               <!-- Items list -->
@@ -296,7 +531,12 @@ onUnmounted(() => {
                   <span class="truncate">
                     {{ i.itemName }}
                   </span>
-                  <span class="font-medium"> × {{ i.quantity }} </span>
+                  <span class="shrink-0">
+                    <span class="font-medium">× {{ i.quantity }}</span>
+                    <span v-if="i.price" class="ml-2 text-primary-text/50">
+                      {{ formatRupiah(i.price * i.quantity) }}
+                    </span>
+                  </span>
                 </li>
               </ul>
 
@@ -309,9 +549,65 @@ onUnmounted(() => {
                 {{ item.note }}
               </div>
 
+              <!-- Amount to pay -->
+              <div
+                v-if="totalFor(item)"
+                class="flex justify-between text-sm border-t border-white/10 pt-2"
+              >
+                <span class="text-primary-text/60">
+                  {{ translate("features.order.order_detail.payment.to_pay") }}
+                </span>
+                <span class="font-semibold text-primary-text">{{
+                  formatRupiah(totalFor(item))
+                }}</span>
+              </div>
+
               <!-- Footer -->
-              <div class="mt-auto text-xs text-primary-text/40">
-                {{ formatDateTime(item.updatedAt ?? item.createdAt) }}
+              <div class="mt-auto flex items-center justify-between gap-2 text-xs">
+                <span class="text-primary-text/40">
+                  {{ formatDateTime(item.updatedAt ?? item.createdAt) }}
+                </span>
+
+                <div class="flex items-center gap-1">
+                  <button
+                    v-if="isOwner"
+                    type="button"
+                    class="flex items-center gap-1 px-2 py-1 rounded-full border border-white/10 hover:bg-white/10 transition"
+                    :aria-pressed="item.isPaid"
+                    @click="
+                      setPaidMutate({ orderId, participantUid: item.id, isPaid: !item.isPaid })
+                    "
+                  >
+                    <IconCircleCheck
+                      class="w-4 h-4"
+                      :class="item.isPaid ? 'text-green-400' : 'text-primary-text/50'"
+                    />
+                    {{
+                      translate(
+                        item.isPaid
+                          ? "features.order.order_detail.payment.mark_unpaid"
+                          : "features.order.order_detail.payment.mark_paid",
+                      )
+                    }}
+                  </button>
+
+                  <button
+                    v-if="isOwner || (isMyItem(item) && !isOrderClosed)"
+                    type="button"
+                    class="flex items-center gap-1 px-2 py-1 rounded-full text-red-300 border border-red-400/20 hover:bg-red-400/10 transition disabled:opacity-50"
+                    :disabled="isPendingRemove"
+                    @click="handleRemoveItem(item)"
+                  >
+                    <IconTrash class="w-4 h-4" />
+                    {{
+                      translate(
+                        isMyItem(item)
+                          ? "features.order.order_detail.manage.leave"
+                          : "features.order.order_detail.manage.remove",
+                      )
+                    }}
+                  </button>
+                </div>
               </div>
             </article>
           </section>
@@ -335,7 +631,10 @@ onUnmounted(() => {
             "
             @click="handleOpenAddItem"
           >
-            <template #icon> <IconPlus class="w-6 h-6 md:w-8 md:h-8"></IconPlus> </template>
+            <template #icon>
+              <IconPencil v-if="myItem" class="w-6 h-6 md:w-8 md:h-8" />
+              <IconPlus v-else class="w-6 h-6 md:w-8 md:h-8" />
+            </template>
           </BaseButton>
         </div>
       </template>
@@ -345,6 +644,9 @@ onUnmounted(() => {
       v-model="isOpenAddItem"
       :order-id="orderId"
       :existing-item="myItem"
+      :menu="orderDetail?.menu ?? []"
     ></AddItemDialog>
+
+    <EditOrderDialog v-if="orderDetail && isOwner" v-model="isOpenEditOrder" :order="orderDetail" />
   </main>
 </template>

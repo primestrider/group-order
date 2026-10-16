@@ -30,6 +30,37 @@ export const createOrderSchema = z.object({
     .refine((value) => value > Date.now(), {
       message: "Please select a later date and time",
     }),
+
+  extraFee: z
+    .number({
+      invalid_type_error: "Please enter a valid number",
+    })
+    .int("Please enter a whole number")
+    .min(0, "Extra fee cannot be negative")
+    .max(10_000_000, "Extra fee is too large"),
+
+  paymentInfo: z.string().max(300, "Payment info cannot exceed 300 characters").optional(),
+
+  menu: z
+    .array(
+      z.object({
+        itemName: z
+          .string()
+          .trim()
+          .min(1, "Item name is required")
+          .max(100, "Item name must be at most 100 characters"),
+
+        price: z
+          .number({
+            required_error: "Price is required",
+            invalid_type_error: "Price must be a number",
+          })
+          .int("Price must be a whole number")
+          .min(0, "Price cannot be negative")
+          .max(100_000_000, "Price is too large"),
+      }),
+    )
+    .max(30, "Menu can have up to 30 items only"),
 })
 
 export type CreateOrderRequest = z.infer<typeof createOrderSchema>

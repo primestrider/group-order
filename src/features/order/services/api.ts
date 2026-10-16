@@ -1,23 +1,80 @@
 import {
+  type DocumentData,
+  type DocumentSnapshot,
   Timestamp,
   type Unsubscribe,
   addDoc,
   collection,
   doc,
-  getDoc,
+  getDocs,
   increment,
   onSnapshot,
   query,
   runTransaction,
   serverTimestamp,
+  updateDoc,
+  where,
 } from "firebase/firestore"
 
 import { firebaseDb } from "@/plugins/firebase"
 import { auth } from "@/plugins/firebase/auth"
 
-import { type OrderDetailItems, type OrderDetailResponse, OrderItemError } from "../models"
+import { isOrderOpen } from "../helpers/order"
+import {
+  type OrderDetailItems,
+  type OrderDetailResponse,
+  OrderItemError,
+  OrderStatus,
+} from "../models"
 import type { AddOrderItemPayload } from "../models/add-item.schema"
 import type { CreateOrderRequest } from "../models/create-order.schema"
+
+const requireFirebase = () => {
+  if (!firebaseDb || !auth?.currentUser) {
+    throw new Error("Firebase not ready")
+  }
+
+  return { db: firebaseDb, uid: auth.currentUser.uid }
+}
+
+/**
+ * Editable order fields shared by create & edit
+ */
+const toOrderValues = (payload: CreateOrderRequest) => ({
+  orderName: payload.orderName.trim(),
+  orderDescription: payload.orderDescription?.trim() ?? "",
+  maxParticipants: payload.maxParticipants,
+  lastOrderAt: Timestamp.fromMillis(payload.lastOrderAt),
+  extraFee: payload.extraFee,
+  paymentInfo: payload.paymentInfo?.trim() ?? "",
+  menu: payload.menu.map((menuItem) => ({
+    itemName: menuItem.itemName.trim(),
+    price: menuItem.price,
+  })),
+})
+
+/**
+ * Map Firestore order document; fills defaults for orders created
+ * before status / payment fields existed
+ */
+const toOrderDetail = (snapshot: DocumentSnapshot<DocumentData>): OrderDetailResponse => {
+  const data = snapshot.data()!
+
+  return {
+    id: snapshot.id,
+    orderName: data.orderName,
+    orderDescription: data.orderDescription,
+    ownerUid: data.ownerUid,
+    maxParticipants: data.maxParticipants,
+    participantsCount: data.participantsCount ?? 0,
+    status: data.status ?? OrderStatus.OPEN,
+    extraFee: data.extraFee ?? 0,
+    paymentInfo: data.paymentInfo ?? "",
+    menu: data.menu ?? [],
+    lastOrderAt: data.lastOrderAt.toDate(),
+    createdAt: data.createdAt?.toDate?.() ?? new Date(),
+  }
+}
 
 /**
  * Creates a new group order in Firestore.
@@ -34,66 +91,105 @@ import type { CreateOrderRequest } from "../models/create-order.schema"
  * @throws {Error} If the user is not authenticated
  */
 export const createGroupOrder = async (payload: CreateOrderRequest): Promise<string> => {
-  if (!auth?.currentUser) {
-    throw new Error("User is not authenticated")
-  }
+  const { db, uid } = requireFirebase()
 
-  if (!firebaseDb) {
-    throw new Error("Firebase is not initialized")
-  }
-
-  const values = {
-    orderName: payload.orderName.trim(),
-    orderDescription: payload.orderDescription?.trim() ?? "",
-    maxParticipants: payload.maxParticipants,
-    lastOrderAt: Timestamp.fromMillis(payload.lastOrderAt),
+  const documentReference = await addDoc(collection(db, "orders"), {
+    ...toOrderValues(payload),
 
     // ownership
-    ownerUid: auth.currentUser.uid,
+    ownerUid: uid,
 
-    // counters
+    // state & counters
+    status: OrderStatus.OPEN,
     participantsCount: 0,
 
     // metadata
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  }
-
-  const documentReference = await addDoc(collection(firebaseDb, "orders"), values)
+  })
 
   return documentReference.id
 }
 
 /**
- * Fetch single order detail by orderId
+ * Orders created by the current user, newest first.
  *
- * @param id - Firestore document ID
- * @throws Error if order not found
+ * Sorted client-side to avoid requiring a composite index (ownerUid + createdAt).
  */
-export const getDetailOrder = async (id: string): Promise<OrderDetailResponse> => {
+export const getMyOrders = async (): Promise<OrderDetailResponse[]> => {
+  const { db, uid } = requireFirebase()
+
+  const snapshot = await getDocs(query(collection(db, "orders"), where("ownerUid", "==", uid)))
+
+  return snapshot.docs
+    .map(toOrderDetail)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+}
+
+/**
+ * Owner edits order settings.
+ *
+ * @throws {Error} {@link OrderItemError.MAX_BELOW_PARTICIPANTS} when the new
+ * limit is lower than the number of joined participants
+ */
+export const updateGroupOrder = async ({
+  orderId,
+  ...payload
+}: CreateOrderRequest & { orderId: string }): Promise<void> => {
+  const { db } = requireFirebase()
+  const orderRef = doc(db, "orders", orderId)
+
+  await runTransaction(db, async (transaction) => {
+    const orderSnap = await transaction.get(orderRef)
+
+    if (!orderSnap.exists()) {
+      throw new Error("Order not found")
+    }
+
+    if (payload.maxParticipants < (orderSnap.data().participantsCount ?? 0)) {
+      throw new Error(OrderItemError.MAX_BELOW_PARTICIPANTS)
+    }
+
+    transaction.update(orderRef, { ...toOrderValues(payload), updatedAt: serverTimestamp() })
+  })
+}
+
+/**
+ * Owner closes the order early or reopens it
+ */
+export const setOrderStatus = async ({
+  orderId,
+  status,
+}: {
+  orderId: string
+  status: OrderStatus
+}): Promise<void> => {
+  const { db } = requireFirebase()
+
+  await updateDoc(doc(db, "orders", orderId), { status, updatedAt: serverTimestamp() })
+}
+
+/**
+ * Listen realtime updates for one order
+ *
+ * @param onChange - Receives `null` when the order does not exist
+ * @param onError - Permission / network errors
+ * @returns unsubscribe function
+ */
+export const listenOrderDetailRealtime = (
+  orderId: string,
+  onChange: (order: OrderDetailResponse | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe => {
   if (!firebaseDb) {
     throw new Error("Firebase is not initialized")
   }
 
-  const referenceDocument = doc(firebaseDb, "orders", id)
-  const snapshotDocument = await getDoc(referenceDocument)
-
-  if (!snapshotDocument.exists()) {
-    throw new Error("Order not found")
-  }
-
-  const response = snapshotDocument.data()
-
-  return {
-    id: snapshotDocument.id,
-    orderName: response.orderName,
-    orderDescription: response.orderDescription,
-    ownerUid: response.ownerUid,
-    maxParticipants: response.maxParticipants,
-    participantsCount: response.participantsCount,
-    lastOrderAt: response.lastOrderAt.toDate(),
-    createdAt: response.createdAt.toDate(),
-  }
+  return onSnapshot(
+    doc(firebaseDb, "orders", orderId),
+    (snapshot) => onChange(snapshot.exists() ? toOrderDetail(snapshot) : null),
+    onError,
+  )
 }
 
 /**
@@ -101,17 +197,13 @@ export const getDetailOrder = async (id: string): Promise<OrderDetailResponse> =
  *
  * - One item per user per order
  * - User can edit their own item
- * - Rejected after `lastOrderAt` ({@link OrderItemError.CLOSED})
+ * - Rejected when closed or after `lastOrderAt` ({@link OrderItemError.CLOSED})
  * - New participants rejected when `maxParticipants` is reached ({@link OrderItemError.FULL})
  */
 export const upsertOrderItem = async (payload: AddOrderItemPayload): Promise<void> => {
-  if (!firebaseDb || !auth?.currentUser) {
-    throw new Error("Firebase not ready")
-  }
+  const { db, uid } = requireFirebase()
 
-  const uid = auth.currentUser.uid
-
-  const orderRef = doc(firebaseDb, "orders", payload.orderId)
+  const orderRef = doc(db, "orders", payload.orderId)
   const itemRef = doc(orderRef, "items", uid)
 
   const itemValues = {
@@ -121,16 +213,16 @@ export const upsertOrderItem = async (payload: AddOrderItemPayload): Promise<voi
   }
 
   // Transaction keeps `participantsCount` consistent when users join concurrently
-  await runTransaction(firebaseDb, async (transaction) => {
+  await runTransaction(db, async (transaction) => {
     const orderSnap = await transaction.get(orderRef)
 
     if (!orderSnap.exists()) {
       throw new Error("Order not found")
     }
 
-    const order = orderSnap.data()
+    const order = toOrderDetail(orderSnap)
 
-    if (order.lastOrderAt.toMillis() <= Date.now()) {
+    if (!isOrderOpen(order)) {
       throw new Error(OrderItemError.CLOSED)
     }
 
@@ -156,10 +248,72 @@ export const upsertOrderItem = async (payload: AddOrderItemPayload): Promise<voi
 }
 
 /**
+ * Remove a participant's item and free their slot.
+ *
+ * - Participant leaving: only while the order is open
+ * - Order owner removing someone: allowed anytime
+ */
+export const removeOrderItem = async ({
+  orderId,
+  participantUid,
+}: {
+  orderId: string
+  participantUid: string
+}): Promise<void> => {
+  const { db, uid } = requireFirebase()
+
+  const orderRef = doc(db, "orders", orderId)
+  const itemRef = doc(orderRef, "items", participantUid)
+
+  await runTransaction(db, async (transaction) => {
+    const orderSnap = await transaction.get(orderRef)
+
+    if (!orderSnap.exists()) {
+      throw new Error("Order not found")
+    }
+
+    const order = toOrderDetail(orderSnap)
+
+    if (order.ownerUid !== uid && !isOrderOpen(order)) {
+      throw new Error(OrderItemError.CLOSED)
+    }
+
+    const itemSnap = await transaction.get(itemRef)
+
+    // Already removed (e.g. double click / removed by owner meanwhile)
+    if (!itemSnap.exists()) return
+
+    transaction.delete(itemRef)
+    transaction.update(orderRef, {
+      participantsCount: increment(-1),
+      updatedAt: serverTimestamp(),
+    })
+  })
+}
+
+/**
+ * Owner marks a participant as paid / unpaid
+ */
+export const setOrderItemPaid = async ({
+  orderId,
+  participantUid,
+  isPaid,
+}: {
+  orderId: string
+  participantUid: string
+  isPaid: boolean
+}): Promise<void> => {
+  const { db } = requireFirebase()
+
+  await updateDoc(doc(db, "orders", orderId, "items", participantUid), { isPaid })
+}
+
+/**
  * Listen realtime updates for order items
  *
  * - Realtime updates when users add/edit items
  * - One document per user (docId = userUid)
+ * - Sorted by join time
  *
  * @param orderId - Target order ID
  * @param onChange - Callback when data changes
@@ -185,13 +339,19 @@ export const listenOrderItemsRealtime = (
         id: doc.id, // == userUid
         participantName: data.participantName,
         note: data.note ?? null,
-        items: data.items ?? [],
+        // items saved before prices existed default to 0
+        items: (data.items ?? []).map((item: Partial<OrderDetailItems["items"][number]>) => ({
+          itemName: item.itemName ?? "",
+          quantity: item.quantity ?? 0,
+          price: item.price ?? 0,
+        })),
+        isPaid: data.isPaid ?? false,
         createdByUid: data.createdByUid,
         createdAt: data.createdAt?.toDate?.() ?? new Date(),
         updatedAt: data.updatedAt?.toDate?.(),
       }
     })
 
-    onChange(items)
+    onChange(items.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()))
   })
 }

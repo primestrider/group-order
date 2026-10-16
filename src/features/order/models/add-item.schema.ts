@@ -13,6 +13,7 @@ import { z } from "zod"
  *   - each item:
  *     - itemName: required, max 100 chars
  *     - quantity: integer >= 1
+ *     - price: integer >= 0 (IDR, 0 when unknown)
  * - note: optional, max 200 chars
  */
 export const addItemSchema = z.object({
@@ -36,6 +37,15 @@ export const addItemSchema = z.object({
           })
           .int("Quantity must be an integer")
           .min(1, "Quantity must be at least 1"),
+
+        price: z
+          .number({
+            required_error: "Price is required",
+            invalid_type_error: "Price must be a number",
+          })
+          .int("Price must be a whole number")
+          .min(0, "Price cannot be negative")
+          .max(100_000_000, "Price is too large"),
       }),
     )
     .min(1, "At least one item is required")
