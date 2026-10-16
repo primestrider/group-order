@@ -4,6 +4,14 @@ export enum OrderPageName {
   ORDER_DETAIL = "OrderDetail",
 }
 
+/**
+ * Business errors thrown by `upsertOrderItem` (used as `Error.message`)
+ */
+export enum OrderItemError {
+  CLOSED = "ORDER_CLOSED",
+  FULL = "ORDER_FULL",
+}
+
 export type OrderDetailResponse = {
   id: string
   orderName: string

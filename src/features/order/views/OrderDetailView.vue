@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { IconClipboardCopy, IconPlus, IconShare, IconUsers } from "@tabler/icons-vue"
 import { useQuery } from "@tanstack/vue-query"
-import { useClipboard, useShare } from "@vueuse/core"
+import { useClipboard, useNow, useShare } from "@vueuse/core"
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
@@ -14,6 +14,7 @@ import { useDateFormatter } from "@/shared/composables/useDateFormatter"
 import { UtilsPageName } from "@/shared/models"
 
 import AddItemDialog from "../components/AddItemDialog.vue"
+import OrderRecap from "../components/OrderRecap.vue"
 import { type OrderDetailItems } from "../models"
 import { getDetailOrder, listenOrderItemsRealtime } from "../services/api"
 
@@ -34,19 +35,19 @@ const {
 })
 
 const handleCopyLink = async (): Promise<void> => {
-  if (!isClipboardSupported) return
+  if (!isClipboardSupported.value) return
   await copy()
 }
 
 const { share, isSupported: isShareSupported } = useShare()
 
 const handleShareLink = async (): Promise<void> => {
-  if (!isShareSupported) return
+  if (!isShareSupported.value) return
 
   await share({
     title: orderDetail.value?.orderName
-      ? `Group Order: ${orderDetail.value.orderName}`
-      : "Group Order",
+      ? `${translate("features.order.order_detail.share_title")}: ${orderDetail.value.orderName}`
+      : translate("features.order.order_detail.share_title"),
     url: shareLink.value,
   })
 }
@@ -81,6 +82,44 @@ let unsubscribeOrderItems: (() => void) | null = null
 const isMyItem = (item: OrderDetailItems): boolean => {
   return !!auth?.currentUser && item.id === auth.currentUser.uid
 }
+
+/**
+ * Current user's existing item (used to prefill edit)
+ */
+const myItem = computed(() => orderItems.value.find(isMyItem) ?? null)
+
+/**
+ * Order creator sees the item recap
+ */
+const isOwner = computed(
+  () => !!auth?.currentUser && orderDetail.value?.ownerUid === auth.currentUser.uid,
+)
+
+/**
+ * Re-evaluated every 30s so the order closes without reload
+ */
+const now = useNow({ interval: 30_000 })
+
+const isOrderClosed = computed(
+  () => !!orderDetail.value && orderDetail.value.lastOrderAt.getTime() <= now.value.getTime(),
+)
+
+const isOrderFull = computed(
+  () => !!orderDetail.value && orderItems.value.length >= orderDetail.value.maxParticipants,
+)
+
+/**
+ * Owner of an existing item may still edit it when the order is full
+ */
+const addItemBlockedReason = computed<string | null>(() => {
+  if (isOrderClosed.value) {
+    return translate("features.order.order_detail.add_item.notification_add_item.closed")
+  }
+  if (isOrderFull.value && !myItem.value) {
+    return translate("features.order.order_detail.add_item.notification_add_item.full")
+  }
+  return null
+})
 
 onMounted(() => {
   unsubscribeOrderItems = listenOrderItemsRealtime(orderId, (data) => {
@@ -172,7 +211,7 @@ onUnmounted(() => {
                     type="button"
                     class="px-3 py-1.5 flex items-center justify-center text-primary-text/80 hover:bg-white/10 transition"
                     @click="handleCopyLink"
-                    aria-label="Copy link"
+                    :aria-label="translate('features.order.order_detail.copy_link')"
                   >
                     <IconClipboardCopy class="w-4 h-4" :class="copied ? 'text-green-400' : ''" />
                   </button>
@@ -183,7 +222,7 @@ onUnmounted(() => {
                     type="button"
                     class="px-3 py-1.5 flex items-center justify-center text-primary-text/80 hover:bg-white/10 transition rounded-r-full"
                     @click="handleShareLink"
-                    aria-label="Share link"
+                    :aria-label="translate('features.order.order_detail.share_link')"
                   >
                     <IconShare class="w-4 h-4" />
                   </button>
@@ -210,8 +249,20 @@ onUnmounted(() => {
 
         <!-- Real Content -->
         <template v-else-if="orderDetail">
+          <OrderRecap
+            v-if="isOwner && orderItems.length"
+            class="mb-6"
+            :order-name="orderDetail.orderName"
+            :order-items="orderItems"
+          />
+
           <!-- list items -->
-          <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <p v-if="!orderItems.length" class="py-10 pb-20 text-center text-sm text-primary-text/60">
+            {{ translate("features.order.order_detail.empty") }}
+          </p>
+
+          <!-- pb-20 keeps the floating add button from covering the last row -->
+          <section v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
             <article
               v-for="item in orderItems"
               :key="item.id"
@@ -224,23 +275,24 @@ onUnmounted(() => {
             >
               <!-- Header -->
               <div class="flex items-start justify-between gap-3">
-                <div>
-                  <h3 class="text-base font-semibold text-primary-text">
-                    {{ item.participantName }}
-                  </h3>
-                  <p class="text-xs text-primary-text/50">User ID: {{ item.id }}</p>
-                </div>
+                <h3 class="text-base font-semibold text-primary-text break-words">
+                  {{ item.participantName }}
+                </h3>
                 <span
                   v-if="isMyItem(item)"
                   class="text-xs px-2 py-1 rounded-full bg-green-400/20 text-green-300 border border-green-400/30"
                 >
-                  You
+                  {{ translate("features.order.order_detail.you") }}
                 </span>
               </div>
 
               <!-- Items list -->
               <ul class="space-y-1 text-sm text-primary-text/80">
-                <li v-for="i in item.items" :key="i.itemName" class="flex justify-between gap-2">
+                <li
+                  v-for="(i, index) in item.items"
+                  :key="index"
+                  class="flex justify-between gap-2"
+                >
                   <span class="truncate">
                     {{ i.itemName }}
                   </span>
@@ -253,29 +305,46 @@ onUnmounted(() => {
                 v-if="item.note"
                 class="text-sm text-primary-text/60 border-t border-white/10 pt-2"
               >
-                <span class="italic">Note:</span>
+                <span class="italic">{{ translate("features.order.order_detail.note") }}</span>
                 {{ item.note }}
               </div>
 
               <!-- Footer -->
-              <div class="mt-auto flex items-center justify-between text-xs text-primary-text/40">
-                <span> Added by: {{ item.createdByUid }} </span>
-                <span v-if="item.createdAt">
-                  {{ formatDateTime(item.createdAt) }}
-                </span>
+              <div class="mt-auto text-xs text-primary-text/40">
+                {{ formatDateTime(item.updatedAt ?? item.createdAt) }}
               </div>
             </article>
           </section>
         </template>
 
-        <div class="absolute bottom-5 right-5">
-          <BaseButton @click="handleOpenAddItem">
+        <div class="absolute bottom-5 right-5 flex items-center gap-3">
+          <span
+            v-if="orderDetail && addItemBlockedReason"
+            class="text-xs text-primary-text/70 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+          >
+            {{ addItemBlockedReason }}
+          </span>
+          <BaseButton
+            :disabled="isLoadingGetDetail || !orderDetail || !!addItemBlockedReason"
+            :aria-label="
+              translate(
+                myItem
+                  ? 'features.order.order_detail.add_item.form.edit_title'
+                  : 'features.order.order_detail.add_item.form.title',
+              )
+            "
+            @click="handleOpenAddItem"
+          >
             <template #icon> <IconPlus class="w-6 h-6 md:w-8 md:h-8"></IconPlus> </template>
           </BaseButton>
         </div>
       </template>
     </BaseCard>
 
-    <AddItemDialog v-model="isOpenAddItem" :order-id="orderId"></AddItemDialog>
+    <AddItemDialog
+      v-model="isOpenAddItem"
+      :order-id="orderId"
+      :existing-item="myItem"
+    ></AddItemDialog>
   </main>
 </template>

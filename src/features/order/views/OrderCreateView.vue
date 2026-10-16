@@ -147,10 +147,12 @@ const handleCreateOrder = handleSubmit((values) => {
   <main class="min-h-screen flex flex-col items-center justify-center p-6">
     <section class="max-w-3xl w-full flex flex-col justify-center gap-2">
       <RouterLink :to="{ name: OrderPageName.HOME }" replace>
-        <span class="text-primary-text underline">back to home</span>
+        <span class="text-primary-text underline">{{
+          translate("features.order.create_order.back_to_home")
+        }}</span>
       </RouterLink>
 
-      <BaseCard title="Create Order">
+      <BaseCard :title="translate('features.order.create_order.title')">
         <template #content>
           <form
             @submit.prevent="handleCreateOrder"

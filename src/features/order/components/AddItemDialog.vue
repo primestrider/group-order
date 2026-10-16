@@ -6,7 +6,6 @@ import { toTypedSchema } from "@vee-validate/zod"
 import { useStorage } from "@vueuse/core"
 import { useFieldArray, useForm } from "vee-validate"
 import { ref, watch } from "vue"
-import { useRoute } from "vue-router"
 
 import { translate } from "@/plugins/language"
 import { showToast } from "@/plugins/toaster/toast"
@@ -14,30 +13,38 @@ import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseFormField from "@/shared/components/BaseFormField.vue"
 import { useBaseFieldError } from "@/shared/composables/useBaseFieldError"
 
+import { type OrderDetailItems, OrderItemError } from "../models"
 import { type AddItemRequest, addItemSchema } from "../models/add-item.schema"
 import { upsertOrderItem } from "../services/api"
+
+const { orderId, existingItem = null } = defineProps<{
+  orderId: string
+  /**
+   * Current user's saved item; when present the dialog edits it
+   */
+  existingItem?: OrderDetailItems | null
+}>()
 
 /**
  * Dialog open state (v-model)
  */
 const open = defineModel<boolean>({ required: true })
 
-const route = useRoute()
-const orderId = route.params.id as string
-
 /**
  * Draft storage key (scoped per order)
  */
 const storageKey = `add-item-draft:${orderId}`
 
-/**
- * Persistent draft state
- */
-const draft = useStorage<AddItemRequest>(storageKey, {
+const emptyDraft = (): AddItemRequest => ({
   participantName: "",
   items: [{ itemName: "", quantity: 1 }],
   note: "",
 })
+
+/**
+ * Persistent draft state
+ */
+const draft = useStorage<AddItemRequest>(storageKey, emptyDraft())
 
 /**
  * Internal flag to prevent draft overwrite during submit/reset
@@ -66,6 +73,27 @@ const [participantName] = defineField("participantName")
 const [note] = defineField("note")
 
 const { fields: itemFields, push, remove } = useFieldArray<AddItemRequest["items"][number]>("items")
+
+/**
+ * Error for a field inside the items array (vee-validate path: `items[0].itemName`)
+ */
+const itemError = (index: number, key: keyof AddItemRequest["items"][number]) =>
+  (errors.value as Record<string, string | undefined>)[`items[${index}].${key}`]
+
+/**
+ * Prefill with the user's saved item when editing
+ */
+watch(open, (isOpen) => {
+  if (!isOpen || !existingItem) return
+
+  resetForm({
+    values: {
+      participantName: existingItem.participantName,
+      items: existingItem.items.map((item) => ({ ...item })),
+      note: existingItem.note ?? "",
+    },
+  })
+})
 
 /**
  * Add new item entry (max 10)
@@ -100,14 +128,9 @@ const { mutate: upsertOrderItemMutate, isPending: isPendingAdd } = useMutation({
   mutationFn: upsertOrderItem,
 
   onSuccess() {
-    // Clear persisted draft
-    draft.value = {
-      participantName: "",
-      items: [{ itemName: "", quantity: 1 }],
-      note: "",
-    }
-
-    resetForm()
+    // Clear persisted draft (reset to empty, not the mount-time initial values)
+    draft.value = emptyDraft()
+    resetForm({ values: emptyDraft() })
     close()
     showToast(
       translate("features.order.order_detail.add_item.notification_add_item.success"),
@@ -116,13 +139,17 @@ const { mutate: upsertOrderItemMutate, isPending: isPendingAdd } = useMutation({
   },
 
   onError(error) {
-    if (error) {
-      console.log(error)
-      showToast(
-        translate("features.order.order_detail.add_item.notification_add_item.error"),
-        "error",
-      )
-    }
+    const messageKey =
+      error.message === OrderItemError.CLOSED
+        ? "closed"
+        : error.message === OrderItemError.FULL
+          ? "full"
+          : "error"
+
+    showToast(
+      translate(`features.order.order_detail.add_item.notification_add_item.${messageKey}`),
+      "error",
+    )
   },
 })
 
@@ -173,7 +200,13 @@ const submit = handleSubmit((values) => {
           >
             <!-- Header -->
             <DialogTitle class="px-4 pt-4 text-lg font-semibold">
-              {{ translate("features.order.order_detail.add_item.form.title") }}
+              {{
+                translate(
+                  existingItem
+                    ? "features.order.order_detail.add_item.form.edit_title"
+                    : "features.order.order_detail.add_item.form.title",
+                )
+              }}
             </DialogTitle>
 
             <!-- FORM -->
@@ -226,7 +259,11 @@ const submit = handleSubmit((values) => {
                     class="grid grid-cols-12 gap-2 items-center"
                   >
                     <div class="col-span-7">
-                      <BaseFormField :field-name="`items.${index}.itemName`" required>
+                      <BaseFormField
+                        :field-name="`items.${index}.itemName`"
+                        required
+                        :error="itemError(index, 'itemName')"
+                      >
                         <input
                           v-model="field.value.itemName"
                           type="text"
@@ -241,7 +278,11 @@ const submit = handleSubmit((values) => {
                     </div>
 
                     <div class="col-span-3">
-                      <BaseFormField :field-name="`items.${index}.quantity`" required>
+                      <BaseFormField
+                        :field-name="`items.${index}.quantity`"
+                        required
+                        :error="itemError(index, 'quantity')"
+                      >
                         <input
                           v-model="field.value.quantity"
                           type="number"

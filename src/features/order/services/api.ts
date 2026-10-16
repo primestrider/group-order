@@ -5,16 +5,17 @@ import {
   collection,
   doc,
   getDoc,
+  increment,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
 } from "firebase/firestore"
 
 import { firebaseDb } from "@/plugins/firebase"
 import { auth } from "@/plugins/firebase/auth"
 
-import type { OrderDetailItems, OrderDetailResponse } from "../models"
+import { type OrderDetailItems, type OrderDetailResponse, OrderItemError } from "../models"
 import type { AddOrderItemPayload } from "../models/add-item.schema"
 import type { CreateOrderRequest } from "../models/create-order.schema"
 
@@ -100,6 +101,8 @@ export const getDetailOrder = async (id: string): Promise<OrderDetailResponse> =
  *
  * - One item per user per order
  * - User can edit their own item
+ * - Rejected after `lastOrderAt` ({@link OrderItemError.CLOSED})
+ * - New participants rejected when `maxParticipants` is reached ({@link OrderItemError.FULL})
  */
 export const upsertOrderItem = async (payload: AddOrderItemPayload): Promise<void> => {
   if (!firebaseDb || !auth?.currentUser) {
@@ -108,32 +111,48 @@ export const upsertOrderItem = async (payload: AddOrderItemPayload): Promise<voi
 
   const uid = auth.currentUser.uid
 
-  const itemRef = doc(firebaseDb, "orders", payload.orderId, "items", uid)
+  const orderRef = doc(firebaseDb, "orders", payload.orderId)
+  const itemRef = doc(orderRef, "items", uid)
 
-  const snap = await getDoc(itemRef)
-
-  if (snap.exists()) {
-    // � UPDATE
-    await setDoc(
-      itemRef,
-      {
-        participantName: payload.participantName,
-        note: payload.note ?? null,
-        items: payload.items,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
-  } else {
-    // � CREATE
-    await setDoc(itemRef, {
-      participantName: payload.participantName,
-      note: payload.note ?? null,
-      items: payload.items,
-      createdByUid: uid,
-      createdAt: serverTimestamp(),
-    })
+  const itemValues = {
+    participantName: payload.participantName,
+    note: payload.note ?? null,
+    items: payload.items,
   }
+
+  // Transaction keeps `participantsCount` consistent when users join concurrently
+  await runTransaction(firebaseDb, async (transaction) => {
+    const orderSnap = await transaction.get(orderRef)
+
+    if (!orderSnap.exists()) {
+      throw new Error("Order not found")
+    }
+
+    const order = orderSnap.data()
+
+    if (order.lastOrderAt.toMillis() <= Date.now()) {
+      throw new Error(OrderItemError.CLOSED)
+    }
+
+    const itemSnap = await transaction.get(itemRef)
+
+    if (itemSnap.exists()) {
+      // UPDATE
+      transaction.update(itemRef, { ...itemValues, updatedAt: serverTimestamp() })
+      return
+    }
+
+    if (order.participantsCount >= order.maxParticipants) {
+      throw new Error(OrderItemError.FULL)
+    }
+
+    // CREATE (+ claim a participant slot)
+    transaction.set(itemRef, { ...itemValues, createdByUid: uid, createdAt: serverTimestamp() })
+    transaction.update(orderRef, {
+      participantsCount: increment(1),
+      updatedAt: serverTimestamp(),
+    })
+  })
 }
 
 /**
