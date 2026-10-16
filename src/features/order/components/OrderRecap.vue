@@ -4,19 +4,23 @@ import { useClipboard } from "@vueuse/core"
 import { computed } from "vue"
 
 import { translate } from "@/plugins/language"
+import { formatRupiah } from "@/shared/helpers/currency"
 
-import { formatOrderRecapText, summarizeOrderItems } from "../helpers/recap"
+import { formatOrderRecapText, summarizeOrderItems, summarizeOrderTotals } from "../helpers/recap"
 import type { OrderDetailItems } from "../models"
 
-const { orderName, orderItems } = defineProps<{
+const { orderName, orderItems, extraFee } = defineProps<{
   orderName: string
   orderItems: OrderDetailItems[]
+  extraFee: number
 }>()
 
 /**
  * Total quantity per item across all participants
  */
 const recapLines = computed(() => summarizeOrderItems(orderItems))
+
+const totals = computed(() => summarizeOrderTotals(orderItems, extraFee))
 
 const totalQuantity = computed(() => recapLines.value.reduce((sum, line) => sum + line.quantity, 0))
 
@@ -26,10 +30,13 @@ const handleCopyRecap = async (): Promise<void> => {
   if (!isClipboardSupported.value) return
 
   await copy(
-    formatOrderRecapText(orderName, orderItems, {
+    formatOrderRecapText(orderName, orderItems, extraFee, {
       total: translate("features.order.order_detail.recap.total"),
       participants: translate("features.order.order_detail.recap.participants"),
       note: translate("features.order.order_detail.note"),
+      extraFee: translate("features.order.create_order.form.extraFee.label"),
+      grandTotal: translate("features.order.order_detail.recap.grand_total"),
+      paid: translate("features.order.order_detail.payment.paid"),
     }),
   )
 }
@@ -75,12 +82,40 @@ const handleCopyRecap = async (): Promise<void> => {
         class="flex justify-between gap-2 border-b border-white/5 py-1"
       >
         <span class="truncate">{{ line.itemName }}</span>
-        <span class="font-semibold">× {{ line.quantity }}</span>
+        <span class="shrink-0">
+          <span class="font-semibold">× {{ line.quantity }}</span>
+          <span v-if="line.subtotal" class="ml-2 text-primary-text/60">
+            {{ formatRupiah(line.subtotal) }}
+          </span>
+        </span>
       </li>
     </ul>
 
-    <p class="text-xs text-primary-text/60 text-right">
-      {{ translate("features.order.order_detail.recap.total") }}: {{ totalQuantity }}
-    </p>
+    <dl class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+      <div>
+        <dt class="text-xs text-primary-text/60">
+          {{ translate("features.order.order_detail.recap.total") }}
+        </dt>
+        <dd class="font-semibold">{{ totalQuantity }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs text-primary-text/60">
+          {{ translate("features.order.create_order.form.extraFee.label") }}
+        </dt>
+        <dd class="font-semibold">{{ formatRupiah(totals.extraFee) }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs text-primary-text/60">
+          {{ translate("features.order.order_detail.recap.grand_total") }}
+        </dt>
+        <dd class="font-semibold">{{ formatRupiah(totals.grandTotal) }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs text-primary-text/60">
+          {{ translate("features.order.order_detail.payment.paid") }}
+        </dt>
+        <dd class="font-semibold">{{ totals.paidCount }} / {{ orderItems.length }}</dd>
+      </div>
+    </dl>
   </section>
 </template>

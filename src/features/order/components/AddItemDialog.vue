@@ -5,14 +5,16 @@ import { useMutation } from "@tanstack/vue-query"
 import { toTypedSchema } from "@vee-validate/zod"
 import { useStorage } from "@vueuse/core"
 import { useFieldArray, useForm } from "vee-validate"
-import { ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 
 import { translate } from "@/plugins/language"
 import { showToast } from "@/plugins/toaster/toast"
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseFormField from "@/shared/components/BaseFormField.vue"
 import { useBaseFieldError } from "@/shared/composables/useBaseFieldError"
+import { formatRupiah } from "@/shared/helpers/currency"
 
+import { sumItemLines } from "../helpers/recap"
 import { type OrderDetailItems, OrderItemError } from "../models"
 import { type AddItemRequest, addItemSchema } from "../models/add-item.schema"
 import { upsertOrderItem } from "../services/api"
@@ -37,7 +39,7 @@ const storageKey = `add-item-draft:${orderId}`
 
 const emptyDraft = (): AddItemRequest => ({
   participantName: "",
-  items: [{ itemName: "", quantity: 1 }],
+  items: [{ itemName: "", quantity: 1, price: 0 }],
   note: "",
 })
 
@@ -45,6 +47,9 @@ const emptyDraft = (): AddItemRequest => ({
  * Persistent draft state
  */
 const draft = useStorage<AddItemRequest>(storageKey, emptyDraft())
+
+// Drafts saved before prices existed have no `price`
+draft.value.items = draft.value.items.map((item) => ({ ...item, price: item.price ?? 0 }))
 
 /**
  * Internal flag to prevent draft overwrite during submit/reset
@@ -96,11 +101,24 @@ watch(open, (isOpen) => {
 })
 
 /**
+ * Live total of the items being entered
+ */
+const itemsTotal = computed(() =>
+  sumItemLines(
+    itemFields.value.map((field) => ({
+      ...field.value,
+      quantity: Number(field.value.quantity) || 0,
+      price: Number(field.value.price) || 0,
+    })),
+  ),
+)
+
+/**
  * Add new item entry (max 10)
  */
 const addItem = () => {
   if (itemFields.value.length >= 10) return
-  push({ itemName: "", quantity: 1 })
+  push({ itemName: "", quantity: 1, price: 0 })
   clearItemError("items")
 }
 
@@ -258,7 +276,7 @@ const submit = handleSubmit((values) => {
                     :key="field.key"
                     class="grid grid-cols-12 gap-2 items-center"
                   >
-                    <div class="col-span-7">
+                    <div class="col-span-12 sm:col-span-5">
                       <BaseFormField
                         :field-name="`items.${index}.itemName`"
                         required
@@ -277,7 +295,7 @@ const submit = handleSubmit((values) => {
                       </BaseFormField>
                     </div>
 
-                    <div class="col-span-3">
+                    <div class="col-span-4 sm:col-span-2">
                       <BaseFormField
                         :field-name="`items.${index}.quantity`"
                         required
@@ -289,16 +307,45 @@ const submit = handleSubmit((values) => {
                           min="1"
                           :disabled="isPendingAdd"
                           @input="clearItemError(`items.${index}.quantity` as any)"
+                          :aria-label="
+                            translate('features.order.order_detail.add_item.form.quantity.label')
+                          "
                           class="w-full py-3 px-4 rounded-full bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
                         />
                       </BaseFormField>
                     </div>
 
-                    <div class="col-span-2 flex items-end justify-center">
+                    <div class="col-span-6 sm:col-span-4">
+                      <BaseFormField
+                        :field-name="`items.${index}.price`"
+                        :error="itemError(index, 'price')"
+                      >
+                        <input
+                          v-model="field.value.price"
+                          type="number"
+                          min="0"
+                          step="500"
+                          inputmode="numeric"
+                          :placeholder="
+                            translate('features.order.order_detail.add_item.form.price.placeholder')
+                          "
+                          :aria-label="
+                            translate('features.order.order_detail.add_item.form.price.label')
+                          "
+                          :disabled="isPendingAdd"
+                          class="w-full py-3 px-4 rounded-full bg-secondary border border-border text-primary-text outline-none focus:ring-2 focus:ring-white/10"
+                        />
+                      </BaseFormField>
+                    </div>
+
+                    <div class="col-span-2 sm:col-span-1 flex items-end justify-center">
                       <button
                         v-if="itemFields.length > 1"
                         type="button"
                         class="text-red-400 hover:text-red-300"
+                        :aria-label="
+                          translate('features.order.order_detail.add_item.form.button.remove_item')
+                        "
                         :disabled="isPendingAdd"
                         @click="
                           () => {
@@ -312,6 +359,13 @@ const submit = handleSubmit((values) => {
                     </div>
                   </div>
                 </div>
+
+                <p class="mr-2 mt-1 text-right text-sm text-primary-text/70">
+                  {{ translate("features.order.order_detail.add_item.form.price.total") }}:
+                  <span class="font-semibold text-primary-text">{{
+                    formatRupiah(itemsTotal)
+                  }}</span>
+                </p>
 
                 <!-- Note -->
                 <BaseFormField

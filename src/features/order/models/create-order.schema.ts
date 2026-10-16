@@ -30,6 +30,16 @@ export const createOrderSchema = z.object({
     .refine((value) => value > Date.now(), {
       message: "Please select a later date and time",
     }),
+
+  extraFee: z
+    .number({
+      invalid_type_error: "Please enter a valid number",
+    })
+    .int("Please enter a whole number")
+    .min(0, "Extra fee cannot be negative")
+    .max(10_000_000, "Extra fee is too large"),
+
+  paymentInfo: z.string().max(300, "Payment info cannot exceed 300 characters").optional(),
 })
 
 export type CreateOrderRequest = z.infer<typeof createOrderSchema>
