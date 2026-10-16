@@ -6,6 +6,7 @@ import { translate } from "@/plugins/language"
 import BaseButton from "@/shared/components/BaseButton.vue"
 import BaseCard from "@/shared/components/BaseCard.vue"
 
+import MyOrdersList from "../components/MyOrdersList.vue"
 import { OrderPageName } from "../models"
 
 const router = useRouter()
@@ -110,6 +111,12 @@ const submitJoin = (): void => {
                 </p>
               </form>
             </div>
+          </template>
+        </BaseCard>
+
+        <BaseCard class="mt-5">
+          <template #content>
+            <MyOrdersList />
           </template>
         </BaseCard>
       </section>

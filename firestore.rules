@@ -42,7 +42,9 @@ service cloud.firestore {
           && data.get('extraFee', 0) >= 0
           && data.get('extraFee', 0) <= 10000000
           && data.get('paymentInfo', '') is string
-          && data.get('paymentInfo', '').size() <= 300;
+          && data.get('paymentInfo', '').size() <= 300
+          && data.get('menu', []) is list
+          && data.get('menu', []).size() <= 30;
       }
 
       allow read: if signedIn();
@@ -50,7 +52,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
           'orderName', 'orderDescription', 'maxParticipants', 'lastOrderAt',
-          'extraFee', 'paymentInfo', 'status',
+          'extraFee', 'paymentInfo', 'menu', 'status',
           'ownerUid', 'participantsCount', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.ownerUid == request.auth.uid
@@ -67,7 +69,7 @@ service cloud.firestore {
           isOwner(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                'orderName', 'orderDescription', 'maxParticipants', 'lastOrderAt',
-               'extraFee', 'paymentInfo', 'status', 'updatedAt'
+               'extraFee', 'paymentInfo', 'menu', 'status', 'updatedAt'
              ])
           && validSettings(request.resource.data)
           && request.resource.data.get('status', 'open') in ['open', 'closed']

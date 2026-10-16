@@ -6,12 +6,14 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
   increment,
   onSnapshot,
   query,
   runTransaction,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore"
 
 import { firebaseDb } from "@/plugins/firebase"
@@ -45,6 +47,10 @@ const toOrderValues = (payload: CreateOrderRequest) => ({
   lastOrderAt: Timestamp.fromMillis(payload.lastOrderAt),
   extraFee: payload.extraFee,
   paymentInfo: payload.paymentInfo?.trim() ?? "",
+  menu: payload.menu.map((menuItem) => ({
+    itemName: menuItem.itemName.trim(),
+    price: menuItem.price,
+  })),
 })
 
 /**
@@ -64,6 +70,7 @@ const toOrderDetail = (snapshot: DocumentSnapshot<DocumentData>): OrderDetailRes
     status: data.status ?? OrderStatus.OPEN,
     extraFee: data.extraFee ?? 0,
     paymentInfo: data.paymentInfo ?? "",
+    menu: data.menu ?? [],
     lastOrderAt: data.lastOrderAt.toDate(),
     createdAt: data.createdAt?.toDate?.() ?? new Date(),
   }
@@ -102,6 +109,21 @@ export const createGroupOrder = async (payload: CreateOrderRequest): Promise<str
   })
 
   return documentReference.id
+}
+
+/**
+ * Orders created by the current user, newest first.
+ *
+ * Sorted client-side to avoid requiring a composite index (ownerUid + createdAt).
+ */
+export const getMyOrders = async (): Promise<OrderDetailResponse[]> => {
+  const { db, uid } = requireFirebase()
+
+  const snapshot = await getDocs(query(collection(db, "orders"), where("ownerUid", "==", uid)))
+
+  return snapshot.docs
+    .map(toOrderDetail)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 }
 
 /**

@@ -34,8 +34,20 @@ export type OrderDetailResponse = {
    * Where participants should pay (bank account, e-wallet, ...)
    */
   paymentInfo: string
+  /**
+   * Items offered by the owner; participants pick from it (price prefilled)
+   */
+  menu: OrderMenuItem[]
   lastOrderAt: Date
   createdAt: Date
+}
+
+export type OrderMenuItem = {
+  itemName: string
+  /**
+   * Unit price in IDR (0 when unknown)
+   */
+  price: number
 }
 
 export type OrderItemLine = {

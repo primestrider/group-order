@@ -45,12 +45,24 @@ export default {
         placeholder: "Example: BCA 1234567890 a.n. Budi / GoPay 0812...",
       },
 
+      menu: {
+        label: "Menu / Available Items",
+        hint: "Optional. Participants can pick these items and the price is filled automatically.",
+        add: "Add Menu Item",
+      },
+
       button: {
         submit: "Create Order",
       },
     },
 
     error: "Error when creating order, please try again later.",
+  },
+
+  my_orders: {
+    title: "My Orders",
+    empty: "You haven't created any orders on this device yet.",
+    error: "Failed to load your orders.",
   },
 
   join_order: {

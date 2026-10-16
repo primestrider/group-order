@@ -15,12 +15,20 @@ import { useBaseFieldError } from "@/shared/composables/useBaseFieldError"
 import { formatRupiah } from "@/shared/helpers/currency"
 
 import { sumItemLines } from "../helpers/recap"
-import { type OrderDetailItems, OrderItemError } from "../models"
+import { type OrderDetailItems, OrderItemError, type OrderMenuItem } from "../models"
 import { type AddItemRequest, addItemSchema } from "../models/add-item.schema"
 import { upsertOrderItem } from "../services/api"
 
-const { orderId, existingItem = null } = defineProps<{
+const {
+  orderId,
+  existingItem = null,
+  menu = [],
+} = defineProps<{
   orderId: string
+  /**
+   * Items offered by the order owner (suggestions + price prefill)
+   */
+  menu?: OrderMenuItem[]
   /**
    * Current user's saved item; when present the dialog edits it
    */
@@ -99,6 +107,20 @@ watch(open, (isOpen) => {
     },
   })
 })
+
+const menuListId = `order-menu-${orderId}`
+
+const toMenuKey = (itemName: string): string => itemName.trim().replace(/s+/g, " ").toLowerCase()
+
+/**
+ * Prefill price when the typed / picked name matches a menu item
+ */
+const applyMenuPrice = (item: AddItemRequest["items"][number]): void => {
+  const menuItem = menu.find((entry) => toMenuKey(entry.itemName) === toMenuKey(item.itemName))
+  if (menuItem) {
+    item.price = menuItem.price
+  }
+}
 
 /**
  * Live total of the items being entered
@@ -285,6 +307,8 @@ const submit = handleSubmit((values) => {
                         <input
                           v-model="field.value.itemName"
                           type="text"
+                          :list="menu.length ? menuListId : undefined"
+                          @change="applyMenuPrice(field.value)"
                           :placeholder="
                             translate('features.order.order_detail.add_item.form.items.placeholder')
                           "
@@ -359,6 +383,16 @@ const submit = handleSubmit((values) => {
                     </div>
                   </div>
                 </div>
+
+                <datalist v-if="menu.length" :id="menuListId">
+                  <option
+                    v-for="menuItem in menu"
+                    :key="menuItem.itemName"
+                    :value="menuItem.itemName"
+                  >
+                    {{ formatRupiah(menuItem.price) }}
+                  </option>
+                </datalist>
 
                 <p class="mr-2 mt-1 text-right text-sm text-primary-text/70">
                   {{ translate("features.order.order_detail.add_item.form.price.total") }}:

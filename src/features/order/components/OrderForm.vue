@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { IconTrash } from "@tabler/icons-vue"
 import { toTypedSchema } from "@vee-validate/zod"
-import { useForm } from "vee-validate"
+import { useFieldArray, useForm } from "vee-validate"
 import { computed, watch } from "vue"
 
 import { translate } from "@/plugins/language"
@@ -39,7 +40,8 @@ const emit = defineEmits<{
 
 const { errors, defineField, values, meta, handleSubmit } = useForm<CreateOrderRequest>({
   validationSchema: toTypedSchema(createOrderSchema),
-  initialValues,
+  // cached / older values may not have a menu yet
+  initialValues: { menu: [], ...initialValues },
 })
 
 /**
@@ -57,6 +59,28 @@ const [maxParticipants] = defineField("maxParticipants")
 const [lastOrderAt] = defineField("lastOrderAt")
 const [extraFee] = defineField("extraFee")
 const [paymentInfo] = defineField("paymentInfo")
+
+/**
+ * Available items offered by the owner (max 30)
+ */
+const MAX_MENU_ITEMS = 30
+
+const {
+  fields: menuFields,
+  push: pushMenuItem,
+  remove: removeMenuItem,
+} = useFieldArray<CreateOrderRequest["menu"][number]>("menu")
+
+const addMenuItem = (): void => {
+  if (menuFields.value.length >= MAX_MENU_ITEMS) return
+  pushMenuItem({ itemName: "", price: 0 })
+}
+
+/**
+ * Error for a field inside the menu array (vee-validate path: `menu[0].itemName`)
+ */
+const menuError = (index: number, key: keyof CreateOrderRequest["menu"][number]) =>
+  (errors.value as Record<string, string | undefined>)[`menu[${index}].${key}`]
 
 /**
  * Adapter for `datetime-local` input
@@ -202,6 +226,81 @@ const textareaClass =
         :class="textareaClass"
       />
     </BaseFormField>
+
+    <!-- Menu (available items) -->
+    <div role="group" aria-labelledby="order-menu-label" class="space-y-2">
+      <div class="ml-2 flex items-center justify-between gap-2">
+        <p id="order-menu-label" class="text-sm font-medium text-slate-300">
+          {{ translate("features.order.create_order.form.menu.label") }}
+          <span class="block text-xs font-normal text-slate-400">
+            {{ translate("features.order.create_order.form.menu.hint") }}
+          </span>
+        </p>
+
+        <button
+          type="button"
+          class="text-xs shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-primary-text disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="menuFields.length >= MAX_MENU_ITEMS || loading"
+          @click="addMenuItem"
+        >
+          + {{ translate("features.order.create_order.form.menu.add") }}
+        </button>
+      </div>
+
+      <div
+        v-for="(field, index) in menuFields"
+        :key="field.key"
+        class="grid grid-cols-12 gap-2 items-center"
+      >
+        <div class="col-span-7">
+          <BaseFormField
+            :field-name="`menu.${index}.itemName`"
+            :error="menuError(index, 'itemName')"
+          >
+            <input
+              v-model="field.value.itemName"
+              type="text"
+              :disabled="loading"
+              :placeholder="
+                translate('features.order.order_detail.add_item.form.items.placeholder')
+              "
+              :aria-label="translate('features.order.order_detail.add_item.form.items.label')"
+              :class="inputClass"
+            />
+          </BaseFormField>
+        </div>
+
+        <div class="col-span-4">
+          <BaseFormField :field-name="`menu.${index}.price`" :error="menuError(index, 'price')">
+            <input
+              v-model="field.value.price"
+              type="number"
+              min="0"
+              step="500"
+              inputmode="numeric"
+              :disabled="loading"
+              :placeholder="
+                translate('features.order.order_detail.add_item.form.price.placeholder')
+              "
+              :aria-label="translate('features.order.order_detail.add_item.form.price.label')"
+              :class="inputClass"
+            />
+          </BaseFormField>
+        </div>
+
+        <div class="col-span-1 flex justify-center">
+          <button
+            type="button"
+            class="text-red-400 hover:text-red-300"
+            :disabled="loading"
+            :aria-label="translate('features.order.order_detail.add_item.form.button.remove_item')"
+            @click="removeMenuItem(index)"
+          >
+            <IconTrash size="18" />
+          </button>
+        </div>
+      </div>
+    </div>
 
     <slot name="actions" :can-submit="meta.valid && !meta.pending && !loading">
       <BaseButton

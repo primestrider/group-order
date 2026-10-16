@@ -45,12 +45,24 @@ export default {
         placeholder: "Contoh: BCA 1234567890 a.n. Budi / GoPay 0812...",
       },
 
+      menu: {
+        label: "Menu / Item Tersedia",
+        hint: "Opsional. Peserta bisa memilih item ini dan harganya terisi otomatis.",
+        add: "Tambah Menu",
+      },
+
       button: {
         submit: "Buat Order",
       },
     },
 
     error: "Gagal membuat order, silakan coba lagi nanti.",
+  },
+
+  my_orders: {
+    title: "Order Saya",
+    empty: "Kamu belum membuat order di perangkat ini.",
+    error: "Gagal memuat order kamu.",
   },
 
   join_order: {

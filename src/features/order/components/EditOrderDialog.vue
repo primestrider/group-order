@@ -35,6 +35,7 @@ const initialValues = computed<CreateOrderRequest>(() => ({
   lastOrderAt: order.lastOrderAt.getTime(),
   extraFee: order.extraFee,
   paymentInfo: order.paymentInfo,
+  menu: order.menu.map((menuItem) => ({ ...menuItem })),
 }))
 
 const { mutate: updateOrderMutate, isPending } = useMutation({

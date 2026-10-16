@@ -421,6 +421,25 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <!-- Menu (available items) -->
+            <div v-if="orderDetail.menu.length" class="space-y-2">
+              <h2 class="text-sm font-semibold">
+                {{ translate("features.order.create_order.form.menu.label") }}
+              </h2>
+              <ul class="flex flex-wrap gap-2 text-sm">
+                <li
+                  v-for="menuItem in orderDetail.menu"
+                  :key="menuItem.itemName"
+                  class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+                >
+                  {{ menuItem.itemName }}
+                  <span v-if="menuItem.price" class="text-primary-text/60">
+                    · {{ formatRupiah(menuItem.price) }}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
             <!-- Payment info -->
             <div
               v-if="orderDetail.paymentInfo"
@@ -625,6 +644,7 @@ onUnmounted(() => {
       v-model="isOpenAddItem"
       :order-id="orderId"
       :existing-item="myItem"
+      :menu="orderDetail?.menu ?? []"
     ></AddItemDialog>
 
     <EditOrderDialog v-if="orderDetail && isOwner" v-model="isOpenEditOrder" :order="orderDetail" />
